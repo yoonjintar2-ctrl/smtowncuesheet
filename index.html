@@ -526,7 +526,7 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
     <!-- Version info -->
     <div style="margin-top:16px;padding:12px 16px;background:rgba(0,0,0,.2);border-radius:8px;border:1px solid rgba(255,255,255,.07)">
       <div style="font-size:.65rem;color:rgba(255,255,255,.65);font-family:'Space Mono',monospace;margin-bottom:8px;letter-spacing:.3px;font-weight:600">
-        큐시트 정리 프로그램 v2.7 Beta &nbsp;·&nbsp; 2026-07-27
+        큐시트 정리 프로그램 v2.9 Beta &nbsp;·&nbsp; 2026-07-27
       </div>
       <div style="font-size:.63rem;color:rgba(255,255,255,.5);line-height:1.9">
         <span style="color:#6ee7b7">✓</span>&nbsp; <b>v2.1</b> 편성표(프로그램별·주차별) 부활, 찾아바꾸기, 정렬 해제 버튼, 채널필터 시 프로그램목록 연동, 본방 정렬안정화·본방여부 값 라벨<br>
@@ -567,10 +567,10 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
     </div>
     <div class="app-topbar-right">
       <button class="tbr-btn" onclick="openSettings(null);_initCprpOnSettingsOpen()">세부 설정</button>
-      <button class="tbr-btn" onclick="addMoreOnboarding()" title="첫 화면으로 돌아가 큐시트를 추가로 온보딩합니다(현재 데이터는 JSON으로 보관)">방송사 큐시트 추가</button>
-      <button class="tbr-btn" onclick="manualSave()" title="온보딩 데이터 저장 (로컬 실행 시 JSON 파일로 내보내기)">저장하기<span id="autoSaveStatus" style="margin-left:6px;opacity:.75;font-size:.85em;font-weight:400"></span></button>
+      <button class="tbr-btn" onclick="addMoreOnboarding()" title="방송사 엑셀 큐시트를 팝업에서 추가 온보딩">방송사 큐시트 추가</button>
       <button class="tbr-btn" onclick="importOnboardingJSON()" title="JSON 파일에서 작업 데이터 불러오기">JSON 파일 추가</button>
-      <button class="tbr-btn" onclick="removeOnboardingData()" title="저장된 온보딩 데이터 제거 후 처음 화면으로" style="border-color:rgba(255,120,120,.55);color:#ffd9d9">온보딩 데이터 제거</button>
+      <button class="tbr-btn" onclick="manualSave()" title="현재 작업 데이터+설정을 JSON 파일로 저장">JSON 파일 저장</button>
+      <button class="tbr-btn" onclick="removeOnboardingData()" title="현재 온보딩 데이터 제거(초기화)" style="border-color:rgba(255,120,120,.55);color:#ffd9d9">온보딩 데이터 제거</button>
       
       
 
@@ -578,17 +578,12 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
         <div class="spinner" style="display:none;width:14px;height:14px;border-width:2px;margin-right:4px"></div>
         <span class="btn-label">엑셀 다운로드</span>
       </button>
-      <span style="font-size:.58rem;color:rgba(255,255,255,.35);font-family:'Space Mono',monospace;white-space:nowrap;line-height:1.3;text-align:right;margin-left:2px">v2.7 Beta<br>2026-07-27</span>
+      <span style="font-size:.58rem;color:rgba(255,255,255,.35);font-family:'Space Mono',monospace;white-space:nowrap;line-height:1.3;text-align:right;margin-left:2px">v2.9 Beta<br>2026-07-27</span>
     </div>
   </div>
 
   <!-- 공유 필터 툴바 — 대시보드/캘린더 탭 공통 사용(switchMainTab에서 표시 여부 제어) -->
-  <div class="filter-toprow" id="sharedFilterToprow">
-        <!-- 기간 선택 제거(v2.7): 날짜 헤더 클릭 팝업으로 기간 필터 -->
-        <button onclick="pvResetAllFilters()" style="margin-left:auto;font-size:.69rem;padding:3px 10px;background:#fff3f3;border:1px solid #e88;border-radius:5px;color:#c33;font-weight:600;cursor:pointer">필터 해제</button>
-        <button onclick="openColConfig()" style="font-size:.69rem;padding:3px 10px;background:#e8eeff;border:1px solid #99a;border-radius:5px;color:#3344aa;font-weight:600;cursor:pointer">열 설정</button>
-        <button onclick="_pvSortKeys=[];_pvSortLocked=false;renderLivePreview()" style="font-size:.69rem;padding:3px 10px;background:#fff;border:1px solid #aaa;border-radius:5px;color:#444;font-weight:600;cursor:pointer" title="정렬 새로고침">↻ 새로고침</button>
-  </div>
+  <!-- 필터바 제거(v2.8): 필터해제/열설정/새로고침은 큐시트 바로 이동 -->
 
   <!-- Tab panels -->
   <div class="tab-panels-wrap" style="flex-shrink:0;display:none">
@@ -670,6 +665,9 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
           <span style="font-size:.82rem;font-weight:700;color:var(--text)">📊 큐시트</span>
           <button id="pvDeleteCheckedBtn" onclick="pvDeleteCheckedRows()" disabled style="opacity:.5;font-size:.68rem;padding:3px 10px;background:#fff3f3;border:1px solid #e88;border-radius:5px;color:#c33;font-weight:600;cursor:default" title="맨 왼쪽 체크박스로 선택한 행을 삭제합니다">선택 행 삭제</button>
           <button onclick="openFindReplace()" style="font-size:.68rem;padding:3px 10px;background:#f5f0ff;border:1px solid #a9a;border-radius:5px;color:#639;font-weight:600;cursor:pointer" title="열 값 찾아 바꾸기">🔎 찾아바꾸기</button>
+          <button onclick="pvResetAllFilters()" style="font-size:.68rem;padding:3px 10px;background:#fff3f3;border:1px solid #e88;border-radius:5px;color:#c33;font-weight:600;cursor:pointer">필터 해제</button>
+          <button onclick="openColConfig()" style="font-size:.68rem;padding:3px 10px;background:#e8eeff;border:1px solid #99a;border-radius:5px;color:#3344aa;font-weight:600;cursor:pointer">열 설정</button>
+          <button onclick="_pvSortKeys=[];_pvSortLocked=false;renderLivePreview()" style="font-size:.68rem;padding:3px 10px;background:#fff;border:1px solid #aaa;border-radius:5px;color:#444;font-weight:600;cursor:pointer" title="정렬 새로고침">↻ 새로고침</button>
           <span id="previewRowCount" style="font-size:.69rem;color:var(--muted);flex:1 1 auto;min-width:200px;white-space:normal;line-height:1.5"></span>
           <span id="previewPagerInline" style="margin-left:auto;display:flex;align-items:center;gap:4px"></span>
 
@@ -989,6 +987,8 @@ var DEFAULT_MAPPING_RULES=[
   // SBS Sport/SBS비즈/SBS Plus/KBS JOY가 먼저 와야 아래 일반 SBS/KBS 패턴(공백 둘러싸임)에 먼저 매칭되지 않음
   {fileIncludes:'SBS Sport',sheetIncludes:'', pp:'SBS', channel:'SBS Sports'},
   {fileIncludes:'SBS비즈',  sheetIncludes:'', pp:'SBS', channel:'SBS Biz'},
+  {fileIncludes:'SBS 비즈', sheetIncludes:'', pp:'SBS', channel:'SBS Biz'},
+  {fileIncludes:'SBS Biz',  sheetIncludes:'', pp:'SBS', channel:'SBS Biz'},
   {fileIncludes:'SBS Plus',sheetIncludes:'',  pp:'SBS', channel:'SBS Plus'},
   {fileIncludes:'KBS JOY', sheetIncludes:'',  pp:'KBS', channel:'KBS Joy'},
   // ── 지상파 3사 (공백 or 언더스코어 둘러싸임 패턴)
@@ -2364,7 +2364,7 @@ function clearAllFiles(){files=[];window._consolidatedRows=null;renderList();upd
 /* ── 추가 온보딩: 현재 편집 데이터를 JSON으로 통합 후 첫 화면으로 ── */
 function addMoreOnboarding(){
   try{ if(_liveRows&&_liveRows.length>1)window._consolidatedRows=JSON.parse(JSON.stringify(_liveRows.slice(1))); }catch(e){}
-  files=[{name:'작업중_데이터.json',status:'loaded',isConsolidated:true,sheets:[]}];
+  if(_liveRows&&_liveRows.length>1){files=[{name:'작업중_데이터.json',status:'loaded',isConsolidated:true,sheets:[]}];}else{files=[];window._consolidatedRows=null;}
   if(typeof renderList==='function')renderList();
   if(typeof updateBtn==='function')updateBtn();
   var ma=document.getElementById('mainApp'); if(ma)ma.style.display='none';
@@ -3322,6 +3322,7 @@ function renderLivePreview(){
   if(!_liveRows||_liveRows.length<2)_liveRows=buildPreviewNormRows();
   var colSel=(_colConfig&&_colConfig.length)?_colConfig:_defaultColConfig();
   colSel=colSel.filter(function(_hc){return _HIDDEN_COLS.indexOf(_hc)<0;});
+  window._pvVisCols=colSel;
   var wrap=document.getElementById('previewTableWrap');
   if(!wrap)return;
   var data=_liveRows;
@@ -5811,7 +5812,7 @@ function _autoSaveNow(){
   }
   if(ok||_autoSaveFileHandle){ _lastAutoSaveTs=Date.now(); _updateAutoSaveLabel(); }
 }
-function _scheduleAutoSave(){ if(_autoSaveTimer)clearTimeout(_autoSaveTimer); _autoSaveTimer=setTimeout(_autoSaveNow,800); }
+function _scheduleAutoSave(){ /* 자동 저장 제거(v2.8): 'JSON 파일 저장'으로만 보관 */ }
 function _updateAutoSaveLabel(){
   var el=document.getElementById('autoSaveStatus');
   if(!el)return;
@@ -5819,7 +5820,6 @@ function _updateAutoSaveLabel(){
   var mins=Math.floor((Date.now()-_lastAutoSaveTs)/60000);
   el.textContent=' · '+mins+'분 전 저장';
 }
-setInterval(_updateAutoSaveLabel,30000);
 
 function manualSave(){
   if(_fsAccessAvail){
@@ -5924,21 +5924,24 @@ function removeOnboardingData(){
 
 
 /* ── 편성표 행 수동 드래그 재정렬 (저장 버튼으로만 확정, 닫기는 취소) ── */
-function anRowDragStart(e){ window._anRowDragKey=e.currentTarget.getAttribute('data-key'); if(e.dataTransfer)e.dataTransfer.effectAllowed='move'; }
+function anRowDragStart(e){ window._anRowDragKey=e.currentTarget.getAttribute('data-key'); window._anRowDragBlock=e.currentTarget.getAttribute('data-prog'); if(e.dataTransfer)e.dataTransfer.effectAllowed='move'; }
 function anRowDragOver(e){ e.preventDefault(); if(e.dataTransfer)e.dataTransfer.dropEffect='move'; e.currentTarget.classList.add('an-drag-over'); }
 function anRowDragLeave(e){ e.currentTarget.classList.remove('an-drag-over'); }
 function anRowDrop(e){
   e.preventDefault();
-  var tbl=document.getElementById('anTblMain');
-  if(tbl)tbl.querySelectorAll('tr.an-drag-over').forEach(function(x){x.classList.remove('an-drag-over');});
-  var targetKey=e.currentTarget.getAttribute('data-key');
-  var src=window._anRowDragKey; if(!src||src===targetKey)return;
-  var order=(window._anCurrentOrder||[]).slice();
-  var si=order.indexOf(src); if(si<0)return;
-  order.splice(si,1);
-  var ti=order.indexOf(targetKey); if(ti<0)ti=order.length;
-  order.splice(ti,0,src);
-  window._anRowOrder=order;
+  var tbl=document.getElementById('anTblMain'); if(!tbl)return;
+  tbl.querySelectorAll('tr.an-drag-over').forEach(function(x){x.classList.remove('an-drag-over');});
+  var srcBlock=window._anRowDragBlock;
+  var tgtBlock=e.currentTarget.getAttribute('data-prog');
+  if(!srcBlock||srcBlock===tgtBlock)return;
+  var order=[],blockOf={};
+  tbl.querySelectorAll('tbody tr[data-key]').forEach(function(tr){var k=tr.getAttribute('data-key');order.push(k);blockOf[k]=tr.getAttribute('data-prog');});
+  var srcKeys=order.filter(function(k){return blockOf[k]===srcBlock;});
+  if(!srcKeys.length)return;
+  var rest=order.filter(function(k){return blockOf[k]!==srcBlock;});
+  var ti=rest.length; for(var i=0;i<rest.length;i++){ if(blockOf[rest[i]]===tgtBlock){ti=i;break;} }
+  var newOrder=rest.slice(0,ti).concat(srcKeys, rest.slice(ti));
+  window._anRowOrder=newOrder;
   _renderAnalysisTable();
 }
 function anSaveOrder(){
@@ -6218,17 +6221,15 @@ function _renderAnalysisTable(){
     });
   });
 
-  // 정렬 규칙: 프로그램 단위로 묶고(같은 프로그램은 붙여둠), 프로그램 순서는 본방 우선 → 평균 단가 높은 순.
-  //           프로그램 내부는 본방 우선 → 요일(월~일) → 시작시간.
-  var _pl={}; Object.keys(groupMap).forEach(function(k){var g=groupMap[k]; (_pl[g.prog]=_pl[g.prog]||[]).push(k);});
+  // 정렬: 본방 그룹(상위) → 비본방 그룹(하위). 섹션 내 = 프로그램 묶음(평균단가 desc), 프로그램 내 = 요일→시작.
+  var _pl={}; Object.keys(groupMap).forEach(function(k){var g=groupMap[k]; var _bk=(g.bonbang?'1':'0')+'||'+g.prog; (_pl[_bk]=_pl[_bk]||[]).push(k);});
   var _pm={};
-  Object.keys(_pl).forEach(function(p){
-    var _bon=0,_mx=0;
-    _pl[p].forEach(function(k){var g=groupMap[k]; if(g.bonbang)_bon=1; var up=g.totalCnt?g._priceSum/g.totalCnt:0; if(up>_mx)_mx=up;});
-    _pm[p]={bon:_bon,price:_mx};
-    _pl[p].sort(function(a,b){
+  Object.keys(_pl).forEach(function(pk){
+    var _bon=pk.charAt(0)==='1'?1:0,_mx=0;
+    _pl[pk].forEach(function(k){var g=groupMap[k]; var up=g.totalCnt?g._priceSum/g.totalCnt:0; if(up>_mx)_mx=up;});
+    _pm[pk]={bon:_bon,price:_mx,prog:groupMap[_pl[pk][0]].prog};
+    _pl[pk].sort(function(a,b){
       var ga=groupMap[a],gb=groupMap[b];
-      var ba=ga.bonbang?1:0,bb=gb.bonbang?1:0; if(ba!==bb)return bb-ba;
       var da=dayOrd[ga.dow]!==undefined?dayOrd[ga.dow]:9,db=dayOrd[gb.dow]!==undefined?dayOrd[gb.dow]:9;
       if(da!==db)return da-db;
       return (ga.st||'').localeCompare(gb.st||'');
@@ -6239,10 +6240,10 @@ function _renderAnalysisTable(){
     var ma=_pm[a],mb=_pm[b];
     if(ma.bon!==mb.bon)return mb.bon-ma.bon;
     if(ma.price!==mb.price)return mb.price-ma.price;
-    return a<b?-1:1;
+    return ma.prog<mb.prog?-1:1;
   });
   var sortedKeys=[];
-  _po.forEach(function(p){ _pl[p].forEach(function(k){sortedKeys.push(k);}); });
+  _po.forEach(function(pk){ _pl[pk].forEach(function(k){sortedKeys.push(k);}); });
   if(window._anRowOrder&&window._anRowOrder.length){
     var _skSet={}; sortedKeys.forEach(function(k){_skSet[k]=1;});
     var _ord=window._anRowOrder.filter(function(k){return _skSet[k];});
@@ -6318,7 +6319,7 @@ function _renderAnalysisTable(){
 
     var _allItems={};Object.values(g.weeks).forEach(function(wl){wl.forEach(function(e){if(e.item)_allItems[e.item]=true;});});
     var _itemStr=Object.keys(_allItems).join(',');
-    h+='<tr class="'+trClasses.join(' ')+'"'+dragAttr+' data-key="'+esc(key)+'" data-pp="'+esc(g.pp)+'" data-ch="'+esc(g.ch)+'" data-item="'+esc(_itemStr)+'">';
+    h+='<tr class="'+trClasses.join(' ')+'"'+dragAttr+' data-key="'+esc(key)+'" data-prog="'+esc((g.bonbang?'1':'0')+'||'+g.prog)+'" data-pp="'+esc(g.pp)+'" data-ch="'+esc(g.ch)+'" data-item="'+esc(_itemStr)+'">';
     // Column-order-aware duplicate suppression
     var _curVals={prog:g.prog,channel:g.ch,division:g._junggi||'',dow:g.dow,st:g.st,et:g.et,grade:g.grade,dur:g._dur||'',price:g._priceSum?g._priceSum.toLocaleString():'',cnt:String(g.totalCnt),amount:g._amountSum?g._amountSum.toLocaleString():'',cmorder:g._cmOrder||''};
     // Suppress: prog, channel, dow only. Never suppress: st,et,grade,dur,price,cnt,amount,cmorder
@@ -6726,6 +6727,14 @@ function pvSelectRange(r1,r2,col){
     cells.forEach(function(c){pvSelectCell(c);});
   }
 }
+function pvSelectRect(r1,r2,colA,colB){
+  pvClearSelection();
+  var vis=window._pvVisCols||[];
+  var pa=vis.indexOf(colA),pb=vis.indexOf(colB);
+  if(pa<0||pb<0){ for(var _r=r1;_r<=r2;_r++){ var _cc=document.querySelector('.pv-editable-cell[data-row="'+_r+'"][data-col="'+colA+'"]'); if(_cc)pvSelectCell(_cc); } return; }
+  var lo=Math.min(pa,pb),hi=Math.max(pa,pb);
+  for(var r=r1;r<=r2;r++){ for(var p=lo;p<=hi;p++){ var cell=document.querySelector('.pv-editable-cell[data-row="'+r+'"][data-col="'+vis[p]+'"]'); if(cell)pvSelectCell(cell); } }
+}
 function pvCellContextMenu(e,td){
   e.preventDefault();
   var ri=+td.getAttribute('data-row');
@@ -6747,18 +6756,19 @@ function pvCellMouseDown(e,td){
     pvClearSelection();
     pvSelectCell(td);
     _pvSelAnchor=td;
+  } else if(_pvSelAnchor){
+    var _ar=+_pvSelAnchor.getAttribute('data-row'),_ac=+_pvSelAnchor.getAttribute('data-col');
+    pvSelectRect(Math.min(_ar,+td.getAttribute('data-row')),Math.max(_ar,+td.getAttribute('data-row')),_ac,+td.getAttribute('data-col'));
   }
   var origTd=td;
-  var col=+td.getAttribute('data-col');
   function onMove(ev){
     var el=document.elementFromPoint(ev.clientX,ev.clientY);
     if(!el)return;
-    var target=el.closest('.pv-editable-cell[data-col="'+col+'"]');
-    if(!target)target=el.closest('.pv-editable-cell');
+    var target=el.closest('.pv-editable-cell');
     if(!target)return;
-    var r1=+_pvSelAnchor.getAttribute('data-row');
-    var r2=+target.getAttribute('data-row');
-    pvSelectRange(Math.min(r1,r2),Math.max(r1,r2),col);
+    var ar=+_pvSelAnchor.getAttribute('data-row'), ac=+_pvSelAnchor.getAttribute('data-col');
+    var tr=+target.getAttribute('data-row'), tc=+target.getAttribute('data-col');
+    pvSelectRect(Math.min(ar,tr),Math.max(ar,tr),ac,tc);
   }
   function onUp(){
     _pvMouseSelecting=false;
@@ -6848,16 +6858,7 @@ document.addEventListener('keydown',function(e){
       if(e.shiftKey&&_pvSelAnchor){
         var anchorRow=+_pvSelAnchor.getAttribute('data-row');
         var anchorCol=+_pvSelAnchor.getAttribute('data-col');
-        // Multi-select range
-        var minR=Math.min(anchorRow,newRow),maxR=Math.max(anchorRow,newRow);
-        var minC=Math.min(anchorCol,newCol),maxC=Math.max(anchorCol,newCol);
-        pvClearSelection();
-        for(var _sr=minR;_sr<=maxR;_sr++){
-          for(var _sc=minC;_sc<=maxC;_sc++){
-            var c=document.querySelector('.pv-editable-cell[data-row="'+_sr+'"][data-col="'+_sc+'"]');
-            if(c)pvSelectCell(c);
-          }
-        }
+        pvSelectRect(Math.min(anchorRow,newRow),Math.max(anchorRow,newRow),anchorCol,newCol);
       } else {
         pvClearSelection();
         pvSelectCell(target);
@@ -8112,7 +8113,7 @@ renderMapTable();
 renderProgNameMapTable();
 updateBtn();
 _initDropzone();
-try{_autoRestoreOnLoad();}catch(e){console.warn('autoRestore',e);}
+try{(function(){var sm=document.getElementById('setupModal');if(sm)sm.style.display='none';var ma=document.getElementById('mainApp');if(ma)ma.style.display='flex';var ps=document.getElementById('previewSection');if(ps)ps.style.display='flex';var bb=document.getElementById('bannerBar');if(bb)bb.style.display='';})();}catch(e){console.warn('startup',e);}
 // Auto-load removed: user chooses on startup screen
 </script>
 

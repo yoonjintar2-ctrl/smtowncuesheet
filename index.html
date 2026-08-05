@@ -550,8 +550,6 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
         <div class="spinner" style="display:none;width:14px;height:14px;border-width:2px;margin-right:4px"></div>
         <span class="btn-label">엑셀 다운로드</span>
       </button>
-      <button class="tbr-btn tbr-json" onclick="importOnboardingJSON()" title="JSON 파일에서 작업 데이터 불러오기">JSON 파일 추가</button>
-      <button class="tbr-btn tbr-json" onclick="manualSave()" title="현재 작업 데이터+설정을 JSON 파일로 저장">JSON 파일 저장</button>
       <span style="font-size:.58rem;color:rgba(255,255,255,.35);font-family:'Space Mono',monospace;white-space:nowrap;line-height:1.3;text-align:right;margin-left:2px">v3.3 Beta<br>2026-07-27</span>
       <div id="fbAuthBar" style="display:flex;align-items:center;gap:6px;margin-left:2px"></div>
       <button class="tbr-btn" onclick="openSettings(null);_initCprpOnSettingsOpen()" title="세부 설정" style="font-size:1.05rem;line-height:1;padding:4px 9px">⚙</button>
@@ -792,6 +790,20 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
       <div class="card-body" id="body-cmnorm">
         <div class="mapping-hint">원본 큐시트의 CM위치 값 → 통합 큐시트의 구분(I열) 값 정규화 규칙입니다.</div>
         <div class="mapping-scroll"><table class="map-tbl"><thead><tr><th>#</th><th style="min-width:160px">원본 CM값 *</th><th style="min-width:100px">정규화 값 *</th><th></th></tr></thead><tbody id="cmNormBody"></tbody></table></div>
+      </div>
+    </div>
+    <!-- JSON 파일 (특수 용도) -->
+    <div class="mapping-card" id="sp-card-json">
+      <div class="mapping-card-header" onclick="toggleCard('jsonfile')">
+        <div class="mapping-card-title">JSON 파일 (백업 · 특수 용도)</div>
+        <div class="mapping-actions"><span class="chevron" id="chev-jsonfile">▾</span></div>
+      </div>
+      <div class="card-body" id="body-jsonfile">
+        <div class="mapping-hint">평소에는 <strong>캠페인 관리</strong>(구글 계정 자동 저장)를 사용하세요. 아래는 오프라인 백업·다른 계정으로 옮길 때만 쓰는 기능입니다.</div>
+        <div style="padding:12px 15px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-sm btn-add" onclick="importOnboardingJSON()" title="JSON 파일에서 작업 데이터 불러오기">JSON 파일 추가</button>
+          <button class="btn-sm btn-add" onclick="manualSave()" title="현재 작업 데이터+설정을 JSON 파일로 저장">JSON 파일 저장</button>
+        </div>
       </div>
     </div>
   </div>
@@ -8353,16 +8365,19 @@ window._fbReady=false; window._fbUser=null; window._fbCurrentCampaign=null; wind
   try{_fbUpdateUI();}catch(e){}
 })();
 function fbLogin(){ if(!window._fbReady){ alert('Firebase 설정이 아직 없습니다.\n온라인(https)에서 FIREBASE_CONFIG를 채우면 구글 로그인이 활성화됩니다.'); return; } var p=new firebase.auth.GoogleAuthProvider(); _fbAuth.signInWithPopup(p).catch(function(e){ alert('로그인 실패: '+e.message); }); }
-function fbLogout(){ if(window._fbAuth)_fbAuth.signOut(); window._fbCurrentCampaign=null; window._fbCampName=''; }
+function fbLogout(){ _fbGuardUnsaved('로그아웃합니다.',function(){ if(window._fbAuth)_fbAuth.signOut(); window._fbCurrentCampaign=null; window._fbCampName=''; window._fbLastSave=0; _fbUpdateUI(); }); }
 function _fbBtn(txt,fn,extra){ return '<button onclick="'+fn+'" class="tbr-btn" style="font-size:.66rem;padding:3px 9px;'+(extra||'')+'">'+txt+'</button>'; }
 function _fbUpdateUI(){
   var el=document.getElementById('fbAuthBar'); if(!el)return;
   if(window._fbUser){
     var nm=esc(_fbUser.displayName||_fbUser.email||'사용자');
-    var camp=window._fbCampName?('<span style="font-size:.62rem;color:#7fe;">▣ '+esc(window._fbCampName)+'</span>'):'<span style="font-size:.62rem;color:#f99">캠페인 미선택</span>';
-    el.innerHTML='<span style="font-size:.66rem;color:rgba(255,255,255,.8)">👤 '+nm+'</span>'+camp
-      +_fbBtn('캠페인 관리','openCampaignManager()','background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.3)')
-      +_fbBtn('로그아웃','fbLogout()','background:transparent;color:rgba(255,255,255,.6);border-color:rgba(255,255,255,.2)');
+    var camp=window._fbCampName
+      ?('<span style="font-size:.62rem;color:#8fe3c0;font-weight:700;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">▣ '+esc(window._fbCampName)+'</span><span id="fbTopSave" style="font-size:.58rem"></span>')
+      :'<span style="font-size:.62rem;color:#ffb3b3">캠페인 미선택</span>';
+    el.innerHTML='<span style="font-size:.66rem;color:rgba(255,255,255,.75)">👤 '+nm+'</span>'+camp
+      +_fbBtn('📁 캠페인 관리','openCampaignManager()','background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.3);font-weight:700')
+      +_fbBtn('로그아웃','fbLogout()','background:transparent;color:rgba(255,255,255,.55);border-color:rgba(255,255,255,.2)');
+    try{_fbRefreshSaveLabel();}catch(e){}
   } else {
     el.innerHTML=_fbBtn('🔑 Google 로그인','fbLogin()','background:#fff;color:#333;font-weight:700');
   }
@@ -8377,54 +8392,122 @@ function _fbOnLogin(){
   }).catch(function(e){console.warn('load settings',e);});
   showSaveToast&&showSaveToast('로그인됨 · 설정을 계정에서 불러왔습니다.');
 }
+/* ═══ 캠페인 관리 (구글 계정 기반, 실시간 자동 저장) ═══ */
+window._fbLastSave=0; window._fbSaving=false;
+function _fbAgoText(){
+  if(!window._fbCurrentCampaign)return '';
+  if(window._fbSaving)return '저장 중…';
+  if(window._pvDirty)return '저장되지 않은 변경 있음';
+  if(!window._fbLastSave)return '';
+  var sec=Math.floor((Date.now()-window._fbLastSave)/1000);
+  if(sec<60)return sec+'초 전 자동 저장 완료';
+  var min=Math.floor(sec/60);
+  if(min<60)return min+'분 전 자동 저장 완료';
+  return Math.floor(min/60)+'시간 전 자동 저장 완료';
+}
+function _fbRefreshSaveLabel(){
+  var el=document.getElementById('fbSaveStatus'); if(el){ el.textContent=_fbAgoText(); el.style.color=window._pvDirty?'#c0392b':'#7a7a7a'; }
+  var t=document.getElementById('fbTopSave'); if(t){ t.textContent=window._fbCurrentCampaign?(window._pvDirty?'● 미저장':'✓ 저장됨'):''; t.style.color=window._pvDirty?'#ffb3b3':'rgba(160,255,200,.9)'; }
+}
+setInterval(_fbRefreshSaveLabel,3000);
+
+/* 편집 중 캠페인이 미저장이면 저장 여부를 먼저 묻는다. 진행하면 cb() 실행 */
+function _fbGuardUnsaved(actionLabel,cb){
+  if(!window._fbCurrentCampaign||!window._pvDirty){ cb(); return; }
+  var nm=window._fbCampName||'현재 캠페인';
+  var ans=confirm('⚠ "'+nm+'"에 저장되지 않은 변경사항이 있습니다.\n\n[확인] 저장한 뒤 '+actionLabel+'\n[취소] 여기서 멈춤(데이터 유지)\n\n저장하지 않고 '+actionLabel+' 경우 편집 중이던 데이터는 사라집니다.');
+  if(!ans)return;
+  fbSaveCampaign(function(ok){ if(ok)cb(); else alert('저장에 실패해 이동을 취소했습니다.'); });
+}
+function fbDiscardAndGo(fn){ if(confirm('저장하지 않고 이동하면 편집 중이던 데이터가 사라집니다. 계속할까요?')){ window._pvDirty=false; fn(); } }
+
 function openCampaignManager(){
   if(!window._fbUser){ alert('먼저 구글 로그인 하세요.'); return; }
   var ex=document.getElementById('fbCampPop'); if(ex)ex.remove();
   var pop=document.createElement('div'); pop.id='fbCampPop';
-  pop.style.cssText='position:fixed;top:70px;right:20px;z-index:10001;background:#fff;border:1px solid #bbb;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:14px;width:340px;max-height:80vh;overflow:auto;font-size:.75rem;color:#222';
-  pop.innerHTML='<div style="font-weight:800;margin-bottom:8px">📁 캠페인 관리 <span style="float:right;cursor:pointer;color:#999" onclick="document.getElementById(\'fbCampPop\').remove()">✕</span></div>'
-    +'<div style="display:flex;gap:6px;margin-bottom:10px"><input id="fbNewCamp" placeholder="새 캠페인 이름" style="flex:1;padding:5px 8px;border:1px solid #ccc;border-radius:6px;font-size:.72rem"><button onclick="fbCreateCampaign()" style="padding:5px 12px;border:none;border-radius:6px;background:#0068b5;color:#fff;font-weight:700;cursor:pointer">생성</button></div>'
-    +'<div id="fbCampList" style="border-top:1px solid #eee;padding-top:8px">불러오는 중…</div>'
-    +'<div style="margin-top:10px;font-size:.66rem;color:#999">현재 캠페인은 <b>클라우드 저장</b>으로 계정에 저장됩니다. 설정·필터·요약 템플릿은 자동으로 계정에 동기화됩니다.</div>';
+  pop.style.cssText='position:fixed;top:64px;right:18px;z-index:10001;background:#fff;border:1px solid #c8c8c8;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.28);padding:15px;width:380px;max-height:82vh;overflow:auto;font-size:.75rem;color:#222;font-family:"Noto Sans KR",sans-serif';
+  pop.innerHTML='<div style="font-weight:800;font-size:.86rem;margin-bottom:3px">📁 캠페인 관리<span style="float:right;cursor:pointer;color:#aaa;font-weight:400" onclick="document.getElementById(\'fbCampPop\').remove()">✕</span></div>'
+    +'<div style="font-size:.65rem;color:#888;margin-bottom:10px">캠페인 1개 = 기존 JSON 파일 1개. 구글 계정에 실시간 저장됩니다.</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;background:#f5f8fb;border:1px solid #e0e6ec;border-radius:8px;padding:7px 10px;margin-bottom:10px">'
+      +'<button onclick="fbSaveCampaign()" style="padding:5px 12px;border:none;border-radius:6px;background:#1d7a46;color:#fff;font-weight:700;cursor:pointer;font-size:.7rem">☁ 지금 저장</button>'
+      +'<span id="fbSaveStatus" style="font-size:.66rem;color:#7a7a7a"></span></div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:10px"><input id="fbNewCamp" placeholder="새 캠페인 이름" onkeydown="if(event.key===\'Enter\')fbCreateCampaign()" style="flex:1;padding:6px 9px;border:1px solid #ccc;border-radius:6px;font-size:.72rem"><button onclick="fbCreateCampaign()" style="padding:6px 13px;border:none;border-radius:6px;background:#0068b5;color:#fff;font-weight:700;cursor:pointer;font-size:.7rem">＋ 생성</button></div>'
+    +'<div id="fbCampList" style="border-top:1px solid #eee;padding-top:8px;color:#999">불러오는 중…</div>';
   document.body.appendChild(pop);
+  _fbRefreshSaveLabel();
   _fbRenderCampList();
 }
 function _fbRenderCampList(){
   var box=document.getElementById('fbCampList'); if(!box)return;
   _fbCampCol().orderBy('updatedAt','desc').get().then(function(qs){
-    if(qs.empty){ box.innerHTML='<div style="color:#999">아직 캠페인이 없습니다. 위에서 새로 만드세요.</div>'; return; }
+    if(qs.empty){ box.innerHTML='<div style="color:#999;padding:6px 2px">아직 캠페인이 없습니다. 위에서 새로 만드세요.</div>'; return; }
     var h='';
     qs.forEach(function(doc){ var d=doc.data(); var cur=(doc.id===window._fbCurrentCampaign);
-      h+='<div style="display:flex;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px solid #f2f2f2;'+(cur?'background:#eef6ff':'')+'">'
-        +'<div style="flex:1"><b>'+esc(d.name||doc.id)+'</b>'+(cur?' <span style="color:#0068b5;font-size:.6rem">● 현재</span>':'')+'<br><span style="color:#aaa;font-size:.6rem">'+(d.updatedAt?new Date(d.updatedAt).toLocaleString():'')+'</span></div>'
-        +'<button onclick="fbLoadCampaign(\''+doc.id+'\')" style="font-size:.64rem;padding:3px 8px;border:1px solid #8ab;border-radius:5px;background:#eef6ff;color:#0068b5;cursor:pointer">열기</button>'
-        +'<button onclick="fbDeleteCampaign(\''+doc.id+'\',\''+esc(d.name||'')+'\')" style="font-size:.64rem;padding:3px 7px;border:1px solid #e0b0b0;border-radius:5px;background:#fff;color:#c0392b;cursor:pointer">삭제</button>'
+      h+='<div style="display:flex;align-items:center;gap:6px;padding:7px 6px;border-radius:7px;margin-bottom:3px;border:1px solid '+(cur?'#8bb8e8':'transparent')+';background:'+(cur?'#eaf3fd':'transparent')+'">'
+        +'<div style="flex:1;min-width:0"><b style="font-size:.75rem">'+esc(d.name||doc.id)+'</b>'+(cur?' <span style="color:#0068b5;font-size:.6rem;font-weight:700">● 편집 중</span>':'')
+        +'<br><span style="color:#aaa;font-size:.6rem">'+(d.updatedAt?new Date(d.updatedAt).toLocaleString():'')+(d.rowCount?(' · '+d.rowCount+'행'):'')+'</span></div>'
+        +(cur?'':'<button onclick="fbLoadCampaign(\''+doc.id+'\')" style="font-size:.64rem;padding:4px 9px;border:1px solid #8ab;border-radius:5px;background:#eef6ff;color:#0068b5;cursor:pointer;font-weight:700">열기</button>')
+        +'<button onclick="fbDeleteCampaign(\''+doc.id+'\',\''+esc((d.name||'').replace(/\'/g,''))+'\')" style="font-size:.64rem;padding:4px 8px;border:1px solid #e6c0c0;border-radius:5px;background:#fff;color:#c0392b;cursor:pointer">삭제</button>'
         +'</div>';
     });
-    h+='<div style="margin-top:8px"><button onclick="fbSaveCampaign()" style="width:100%;padding:7px;border:none;border-radius:6px;background:#1d7a46;color:#fff;font-weight:700;cursor:pointer">☁ 현재 데이터를 캠페인에 저장</button></div>';
     box.innerHTML=h;
   }).catch(function(e){ box.innerHTML='<div style="color:#c33">목록 오류: '+esc(e.message)+'</div>'; });
 }
 function fbCreateCampaign(){
-  var nm=(document.getElementById('fbNewCamp')||{}).value; nm=(nm||'').trim(); if(!nm){alert('이름을 입력하세요.');return;}
-  var data=JSON.stringify((typeof _liveRows!=='undefined'&&_liveRows)?_liveRows:[]);
-  _fbCampCol().add({name:nm,liveRows:data,updatedAt:Date.now()}).then(function(ref){ window._fbCurrentCampaign=ref.id; window._fbCampName=nm; _fbUpdateUI(); _fbRenderCampList(); showSaveToast&&showSaveToast('캠페인 생성됨: '+nm); }).catch(function(e){alert('생성 실패: '+e.message);});
-}
-function fbLoadCampaign(id){
-  _fbCampCol().doc(id).get().then(function(d){ if(!d.exists){alert('없는 캠페인');return;} var dd=d.data();
-    try{ var rows=JSON.parse(dd.liveRows||'[]'); window._liveRows=rows; window._fbCurrentCampaign=id; window._fbCampName=dd.name||id;
-      if(typeof renderLivePreview==='function')renderLivePreview(); if(typeof updatePreviewFilters==='function')updatePreviewFilters(); if(typeof renderCalendarTab==='function')renderCalendarTab();
-      _fbUpdateUI(); _fbRenderCampList(); window._pvDirty=false; showSaveToast&&showSaveToast('캠페인 열기: '+window._fbCampName);
-    }catch(e){alert('데이터 로드 실패: '+e.message);}
+  var inp=document.getElementById('fbNewCamp'); var nm=((inp&&inp.value)||'').trim();
+  if(!nm){alert('캠페인 이름을 입력하세요.');return;}
+  _fbGuardUnsaved('새 캠페인을 만듭니다.',function(){
+    var rows=(typeof _liveRows!=='undefined'&&_liveRows)?_liveRows:[];
+    _fbCampCol().add({name:nm,liveRows:JSON.stringify(rows),rowCount:Math.max(0,rows.length-1),updatedAt:Date.now()}).then(function(ref){
+      window._fbCurrentCampaign=ref.id; window._fbCampName=nm; window._pvDirty=false; window._fbLastSave=Date.now();
+      if(inp)inp.value=''; _fbUpdateUI(); _fbRefreshSaveLabel(); _fbRenderCampList();
+      showSaveToast&&showSaveToast('캠페인 생성: '+nm);
+    }).catch(function(e){alert('생성 실패: '+e.message);});
   });
 }
-function fbSaveCampaign(){
-  if(!window._fbCurrentCampaign){ alert('먼저 캠페인을 만들거나 여세요.'); return; }
-  var data=JSON.stringify((typeof _liveRows!=='undefined'&&_liveRows)?_liveRows:[]);
-  if(data.length>1000000){ alert('데이터가 1MB를 초과해 클라우드에 저장할 수 없습니다. 캠페인을 나눠 주세요.'); return; }
-  _fbCampCol().doc(window._fbCurrentCampaign).set({liveRows:data,updatedAt:Date.now()},{merge:true}).then(function(){ window._pvDirty=false; window._fbLastSave=Date.now(); _fbRenderCampList(); showSaveToast&&showSaveToast('☁ 캠페인 저장 완료'); }).catch(function(e){alert('저장 실패: '+e.message);});
+function fbLoadCampaign(id){
+  _fbGuardUnsaved('다른 캠페인을 엽니다.',function(){ _fbDoLoad(id); });
 }
-function fbDeleteCampaign(id,nm){ if(!confirm('캠페인 "'+nm+'" 삭제?'))return; _fbCampCol().doc(id).delete().then(function(){ if(window._fbCurrentCampaign===id){window._fbCurrentCampaign=null;window._fbCampName='';_fbUpdateUI();} _fbRenderCampList(); }); }
-/* 20초마다 변경분 클라우드 자동 저장 */
-setInterval(function(){ try{ if(window._fbUser&&window._fbCurrentCampaign&&window._pvDirty){ fbSaveCampaign(); } }catch(e){} },20000);
+function _fbDoLoad(id){
+  _fbCampCol().doc(id).get().then(function(d){ if(!d.exists){alert('없는 캠페인입니다.');return;} var dd=d.data();
+    try{ var rows=JSON.parse(dd.liveRows||'[]'); window._liveRows=rows; if(typeof _liveRows!=='undefined')_liveRows=rows;
+      window._fbCurrentCampaign=id; window._fbCampName=dd.name||id; window._pvDirty=false; window._fbLastSave=Date.now();
+      try{ window._pvUndoStack=[]; window._pvRedoStack=[]; }catch(e){}
+      if(typeof renderLivePreview==='function')renderLivePreview();
+      if(typeof updatePreviewFilters==='function')updatePreviewFilters();
+      if(typeof renderCalendarTab==='function')renderCalendarTab();
+      if(typeof renderSummaryTab==='function')renderSummaryTab();
+      window._pvDirty=false;
+      _fbUpdateUI(); _fbRefreshSaveLabel(); _fbRenderCampList();
+      showSaveToast&&showSaveToast('캠페인 열기: '+window._fbCampName);
+    }catch(e){alert('데이터 로드 실패: '+e.message);}
+  }).catch(function(e){alert('불러오기 실패: '+e.message);});
+}
+function fbSaveCampaign(done){
+  if(!window._fbUser){ alert('먼저 구글 로그인 하세요.'); done&&done(false); return; }
+  if(!window._fbCurrentCampaign){ alert('먼저 캠페인을 만들거나 여세요.'); done&&done(false); return; }
+  var rows=(typeof _liveRows!=='undefined'&&_liveRows)?_liveRows:[];
+  var data=JSON.stringify(rows);
+  if(data.length>1000000){ alert('데이터가 1MB를 초과해 클라우드에 저장할 수 없습니다. 캠페인을 나눠 주세요.'); done&&done(false); return; }
+  window._fbSaving=true; _fbRefreshSaveLabel();
+  _fbCampCol().doc(window._fbCurrentCampaign).set({liveRows:data,rowCount:Math.max(0,rows.length-1),updatedAt:Date.now()},{merge:true}).then(function(){
+    window._pvDirty=false; window._fbSaving=false; window._fbLastSave=Date.now();
+    _fbRefreshSaveLabel(); if(document.getElementById('fbCampList'))_fbRenderCampList();
+    done&&done(true);
+  }).catch(function(e){ window._fbSaving=false; _fbRefreshSaveLabel(); alert('저장 실패: '+e.message); done&&done(false); });
+}
+function fbDeleteCampaign(id,nm){
+  if(!confirm('캠페인 "'+nm+'"을(를) 삭제할까요? 되돌릴 수 없습니다.'))return;
+  _fbCampCol().doc(id).delete().then(function(){
+    if(window._fbCurrentCampaign===id){ window._fbCurrentCampaign=null; window._fbCampName=''; window._fbLastSave=0; _fbUpdateUI(); _fbRefreshSaveLabel(); }
+    _fbRenderCampList();
+  }).catch(function(e){alert('삭제 실패: '+e.message);});
+}
+/* 실시간 자동 저장: 변경 후 5초 동안 조용하면 저장(구글 드라이브 방식) */
+setInterval(function(){ try{
+  if(window._fbUser&&window._fbCurrentCampaign&&window._pvDirty&&!window._fbSaving){
+    if(Date.now()-(window._fbLastSave||0)>4000) fbSaveCampaign();
+  }
+}catch(e){} },5000);
+/* 로그아웃/새로고침 전 미저장 경고는 기존 beforeunload가 처리 */
 </script>

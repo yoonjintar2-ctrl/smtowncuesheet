@@ -3069,11 +3069,20 @@ function _pivotTableHTML(){
     if(b.showTotal)t+='<td style="'+cellStyle(_pvBlockIsPct(b)?'center':'right')+'">'+_pvTotFmt(b,b.grand)+'</td>';
   });
   t+='</tr></tbody></table>';
-  /* 값 정보는 헤더 대신 표 우측 상단 캡션으로 */
-  var vseen={},vlist=[];
-  blocks.forEach(function(b){ b.leaves.forEach(function(lf){ if(!vseen[lf.valLabel]){vseen[lf.valLabel]=1;vlist.push(lf.valLabel);} }); });
-  var cap='<div style="text-align:right;font-size:.66rem;color:#777;margin-bottom:3px">값: <b>'+esc(vlist.join(' · '))+'</b>'
-    +(vlist.some(function(x){return /%/.test(x);})?' <span style="color:#aaa">(%는 행 합계 기준)</span>':'')+'</div>';
+  /* 값 정보는 헤더 대신 표 우측 상단 캡션으로 — 열(블록)별로 어떤 값이 쓰였는지 명시 */
+  var anyPct=false, parts=[];
+  blocks.forEach(function(b,bi){
+    var seen={},vs=[];
+    b.leaves.forEach(function(lf){ if(!seen[lf.valLabel]){seen[lf.valLabel]=1;vs.push(lf.valLabel);} if(lf.pct)anyPct=true; });
+    var colName=b.fields.length?b.fields.map(function(f){return OUT_COLS[f];}).join(' ▸ '):'열 없음';
+    parts.push('<span style="display:inline-block;margin-left:10px;white-space:nowrap">'
+      +'<span style="color:#999">'+esc(colName)+'</span>'
+      +'<span style="color:#bbb"> → </span><b style="color:#444">'+esc(vs.join(', '))+'</b>'
+      +(b.showTotal?'<span style="color:#bbb"> +합계</span>':'')+'</span>');
+  });
+  var cap='<div style="text-align:right;font-size:.66rem;color:#777;margin-bottom:4px;line-height:1.7">'
+    +'<span style="color:#999">열 → 값</span>'+parts.join('')
+    +(anyPct?'<span style="display:inline-block;margin-left:10px;color:#aaa">(%는 행 합계 기준)</span>':'')+'</div>';
   return cap+t;
 }
 
@@ -9300,7 +9309,7 @@ function _fbUpdateUI(){
     var nm=esc(_fbUser.displayName||_fbUser.email||'사용자');
     var camp=window._fbCampName?(' · '+esc(window._fbCampName)):'';
     el.innerHTML=
-      '<button class="tbr-btn" onclick="openCampaignManager()" title="캠페인 생성 · 복제 · 열기 · 삭제 (구글 계정 저장)" style="font-weight:700">📁 캠페인 관리<span id="fbTopSave" style="font-size:.62rem;margin-left:5px"></span></button>'
+      '<button class="tbr-btn" onclick="openCampaignManager()" title="캠페인 생성 · 복제 · 열기 · 삭제 (구글 계정 저장)" style="font-weight:700">📁 캠페인 관리</button>'
       +'<span style="font-size:.68rem;color:#555;font-weight:600;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis">'+nm+'님 환영합니다.'+camp+'</span>'
       +'<button class="tbr-btn" onclick="fbLogout()" title="로그아웃">로그아웃</button>';
     try{_fbRefreshSaveLabel();}catch(e){}
@@ -9365,7 +9374,7 @@ function _fbAgoText(){
 }
 function _fbRefreshSaveLabel(){
   var el=document.getElementById('fbSaveStatus'); if(el){ el.textContent=_fbAgoText(); el.style.color=window._pvDirty?'#c0392b':'#7a7a7a'; }
-  var t=document.getElementById('fbTopSave'); if(t){ t.textContent=window._fbCurrentCampaign?(window._pvDirty?'● 미저장':'✓ 저장됨'):''; t.style.color=window._pvDirty?'#ffb3b3':'rgba(160,255,200,.9)'; }
+  var t=document.getElementById('fbTopSave'); if(t)t.textContent='';   /* 상단 버튼에는 표시하지 않음 */
 }
 setInterval(_fbRefreshSaveLabel,3000);
 

@@ -415,6 +415,9 @@ tr.pv-highlight-on td{background:rgba(251,191,36,.18)!important}
 .tbr-row>*{flex-shrink:0}
 .tbr-row2{min-height:20px}
 .tbr-sep{width:1px;height:18px;background:var(--border);margin:0 3px}
+.pv-cell-sel{width:100%;border:none;background:transparent;font:inherit;font-size:.68rem;color:inherit;padding:1px 2px;cursor:pointer;appearance:none;-webkit-appearance:none;text-align:center;text-align-last:center}
+.pv-cell-sel:hover{background:#eef4ff}
+.pv-cell-sel:focus{outline:1px solid #0068b5;background:#fff}
 .pv-tbtn{font-size:.68rem;padding:3px 10px;background:#fff;border:1px solid #bbb;border-radius:5px;color:#444;font-weight:600;cursor:pointer;font-family:"Noto Sans KR",sans-serif;transition:all .12s}
 .pv-tbtn:hover:not(:disabled){background:#f2f2f4;border-color:#888;color:#111}
 .pv-tbtn:disabled{opacity:.45;cursor:default}
@@ -1270,6 +1273,21 @@ function getItemLabel(soaeName){
   return'';
 }
 
+/* 규칙이 바뀌면 이미 만들어진 행의 '지상파/케이블 구분'(29열)을 다시 계산한다 */
+function reapplyBroadcastType(){
+  if(!_liveRows||_liveRows.length<2)return 0;
+  var n=0;
+  for(var i=1;i<_liveRows.length;i++){
+    var t=getBroadcastType(_liveRows[i][0]);
+    if(_liveRows[i][29]!==t){ _liveRows[i][29]=t; n++; }
+  }
+  if(n){
+    if(typeof renderLivePreview==='function')renderLivePreview();
+    if(typeof renderCalendarTab==='function'){try{renderCalendarTab();}catch(e){}}
+    if(typeof renderSummaryTab==='function'){try{renderSummaryTab();}catch(e){}}
+  }
+  return n;
+}
 function getBroadcastType(channel){
   if(!channel)return'';
   var ch=String(channel).normalize('NFC');
@@ -2793,7 +2811,7 @@ function _pvTextColor(bg){ var m=/#?([0-9a-fA-F]{6})/.exec(bg||''); if(!m)return
 /* 열/행 머리글에 보여줄 값 표기 (본방여부·주차 등 코드값을 사람이 읽는 말로) */
 function _pvDispVal(col,v){
   var s=String(v==null?'':v).trim();
-  if(col===41)return (s==='1'||s==='본방')?'본방':(s===''?'':'비본방');
+  if(col===41)return (s==='1'||s==='본방')?'본방':(s===''?'':'재방');
   if(col===34){ if(s==='')return ''; return /주차$/.test(s)?s:(s+'주차'); }
   if(col===19||col===20||col===21)return _pvMD(s);   /* 시작일자·종료일자·집행일 → M/D */
   return s;
@@ -4155,8 +4173,8 @@ function renderBroadcastTable(){
   var body=document.getElementById('bcastBody');if(!body)return;
   body.innerHTML=broadcastRules.map(function(r,i){
     return'<tr><td class="row-num">'+(i+1)+'</td>'
-      +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="broadcastRules['+i+'].channel=this.value;_liveRows=null;syncSettingsQuiet();"></td>'
-      +'<td><input class="map-input" value="'+esc(r.type||'')+'" oninput="broadcastRules['+i+'].type=this.value;_liveRows=null;syncSettingsQuiet();"></td>'
+      +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="broadcastRules['+i+'].channel=this.value;syncSettingsQuiet();reapplyBroadcastType();"></td>'
+      +'<td><input class="map-input" value="'+esc(r.type||'')+'" oninput="broadcastRules['+i+'].type=this.value;syncSettingsQuiet();reapplyBroadcastType();"></td>'
       +'<td><button class="btn-del-row" onclick="broadcastRules.splice('+i+',1);renderBroadcastTable()">×</button></td>'
       +'</tr>';
   }).join('');
@@ -4605,6 +4623,7 @@ function renderLivePreview(){
     var globalRowNum=_pvPageOffset+ri+1;
     return'<tr data-ri="'+ri+'" class="'+(_pvCheckedRows&&_pvCheckedRows.has(row)?'pv-checked-row':'')+'"><td class="pv-row-num" data-row="'+ri+'" style="background:#f0f0f5;text-align:center;padding:2px 3px;user-select:none;border-right:2px solid #ccc;min-width:32px;position:sticky;left:0;z-index:1"><input type="checkbox" class="pv-rowcheck" data-absidx="'+(_pvPageOffset+ri)+'"'+(_pvCheckedRows&&_pvCheckedRows.has(row)?' checked':'')+' style="cursor:pointer;margin:0;vertical-align:middle"></td>'+colSel.map(function(i){
       var v=row[i];
+      if(_PV_SELECT_COLS.indexOf(i)>=0)return _pvSelectCellHTML(ri,i,v);   /* 값 선택형 열 */
       if(v===undefined||v===null||v===''){
         if(i===2)return'<td class="pv-prog-cell pv-editable-cell" id="pvtd-'+ri+'" data-row="'+ri+'" data-col="2" data-orig=""></td>';
         if(i===41)return'<td class="pv-editable-cell" data-row="'+ri+'" data-col="41"><input type="checkbox" class="pv-bonbang-sel" data-row="'+ri+'" onclick="event.stopPropagation()" style="cursor:pointer;width:15px;height:15px;vertical-align:middle"></td>';
@@ -4953,6 +4972,82 @@ function pvEditProg(input, rowIdx){
   log('프로그램명 변경: '+oldBase+' → '+newBase,'ok');
 }
 
+/* ═══ 드롭다운 셀 (지상파/케이블·요일·채널·PP·본방여부) ═══ */
+var _PV_SELECT_COLS=[29,3,0,33,41];
+var _PV_DOW=['월','화','수','목','금','토','일'];
+function _pvSelectOptions(col){
+  if(col===29)return ['지상파','케이블/종편'];
+  if(col===3)return _PV_DOW.slice();
+  if(col===41)return ['본방','재방'];
+  var set={},out=[];
+  function add(v){ v=String(v==null?'':v).trim(); if(v&&!set[v]){set[v]=1;out.push(v);} }
+  if(col===0){
+    (broadcastRules||[]).forEach(function(r){add(r.channel);});
+    (mappingRules||[]).forEach(function(r){add(r.channel);});
+  } else if(col===33){
+    (ppOrderList||[]).forEach(add);
+    (mappingRules||[]).forEach(function(r){add(r.pp);});
+  }
+  (_liveRows||[]).slice(1).forEach(function(r){add(r[col]);});   /* 데이터에만 있는 값도 유지 */
+  out.sort(function(a,b){return a.localeCompare(b,'ko');});
+  return out;
+}
+function _pvSelectCellHTML(ri,col,v){
+  var cur=String(v==null?'':v).trim();
+  var disp=(col===41)?((cur==='1'||cur==='본방')?'본방':(cur===''?'':'재방')):cur;
+  var opts=_pvSelectOptions(col), h='';
+  h+='<option value=""'+(disp===''?' selected':'')+'></option>';
+  opts.forEach(function(o){ h+='<option value="'+esc(o)+'"'+(o===disp?' selected':'')+'>'+esc(o)+'</option>'; });
+  if(disp&&opts.indexOf(disp)<0)h+='<option value="'+esc(disp)+'" selected>'+esc(disp)+'</option>';
+  if(col===0||col===33)h+='<option value="__add__">＋ 새로 추가…</option>';
+  return '<td class="pv-editable-cell" data-row="'+ri+'" data-col="'+col+'">'
+    +'<select class="pv-cell-sel" data-row="'+ri+'" data-col="'+col+'">'+h+'</select></td>';
+}
+function pvChangeSelectCell(sel){
+  var ri=+sel.getAttribute('data-row'), col=+sel.getAttribute('data-col');
+  if(!_pvFilteredRows||ri>=_pvFilteredRows.length)return;
+  var val=sel.value;
+  if(val==='__add__'){                       /* 목록에 없는 채널·PP를 새로 등록 */
+    var label=(col===0)?'채널':'PP';
+    var nv=prompt('새 '+label+' 이름을 입력하세요.',''); 
+    if(nv===null){ renderLivePreview(); return; }
+    nv=String(nv).trim();
+    if(!nv){ renderLivePreview(); return; }
+    if(col===0){
+      var t=confirm('"'+nv+'"의 구분을 선택하세요.\n\n[확인] 케이블/종편\n[취소] 지상파')?'케이블/종편':'지상파';
+      if(!(broadcastRules||[]).some(function(r){return r.channel===nv;}))broadcastRules.push({channel:nv,type:t});
+    } else {
+      if(!ppOrderList)ppOrderList=[];
+      if(ppOrderList.indexOf(nv)<0)ppOrderList.push(nv);
+    }
+    if(typeof syncSettingsQuiet==='function')syncSettingsQuiet();
+    if(typeof renderBroadcastTable==='function'){try{renderBroadcastTable();}catch(e){}}
+    if(typeof renderPPOrderTable==='function'){try{renderPPOrderTable();}catch(e){}}
+    val=nv;
+  }
+  _pvPushUndo();
+  var row=_pvFilteredRows[ri];
+  if(col===41){
+    var nb=(val==='본방')?1:(val===''?'':0);
+    row[41]=nb;
+    var pn=String(row[2]||''), has=pn.indexOf(' <본방>')>=0;
+    if(nb===1&&!has)row[2]=pn+' <본방>';
+    else if(nb!==1&&has)row[2]=pn.replace(/ <본방>$/,'');
+    if(typeof syncProgFull==='function'){try{syncProgFull();}catch(e){}}
+  } else if(col===3){
+    row[3]=val;
+    for(var d=0;d<7;d++)row[11+d]=(_PV_DOW[d]===val)?1:0;      /* 월~일 플래그 */
+    row[31]=(val==='토'||val==='일')?'주말':(val?'주중':'');    /* 주중/주말 */
+  } else if(col===0){
+    row[0]=val;
+    row[29]=getBroadcastType(val);                              /* 채널 바뀌면 구분 재계산 */
+  } else {
+    row[col]=val;
+  }
+  renderLivePreview();
+  if(typeof renderCalendarTab==='function'){try{renderCalendarTab();}catch(e){}}
+  if(typeof _scheduleAutoSave==='function')_scheduleAutoSave();
+}
 function pvChangeBonbang(sel,rowIdx){
   if(!_pvFilteredRows||rowIdx>=_pvFilteredRows.length)return;
   _pvPushUndo();
@@ -8149,10 +8244,8 @@ document.addEventListener('keydown',function(e){
   if((e.ctrlKey||e.metaKey)&&e.key==='c'&&!e.shiftKey){
     e.preventDefault();
     var texts=_pvSelectedCells.map(function(c){
-      if(c.getAttribute('data-col')==='41'){
-        var sel=c.querySelector('select');
-        return sel&&sel.value==='1'?'본방':'';
-      }
+      var _s=c.querySelector('select.pv-cell-sel');
+      if(_s)return _s.value==='__add__'?'':_s.value;      /* 드롭다운 셀은 선택된 값 */
       return c.textContent.trim();
     });
     navigator.clipboard.writeText(texts.join('\n'));
@@ -8183,6 +8276,8 @@ document.addEventListener('keydown',function(e){
     var td=_pvSelectedCells[0];
     var ri=+td.getAttribute('data-row');
     var ci=+td.getAttribute('data-col');
+    var _cs=td.querySelector('select.pv-cell-sel');
+    if(_cs){ _cs.focus(); return; }
     if(ci===2)pvCellDblClick(td,ri);
     else if(ci===41){
       var sel=td.querySelector('select');
@@ -8256,6 +8351,17 @@ document.addEventListener('paste',function(e){
         if(typeof syncProgFull==='function'){try{syncProgFull();}catch(_e){}}
       } else if(_c===18){
         if(typeof _pvApplyDateEdit==='function'&&_pvApplyDateEdit(_row,_one)){} else _row[18]=_one;
+      } else if(_c===41){
+        _row[41]=(_one==='본방'||_one==='1')?1:(_one===''?'':0);
+        var _pn=String(_row[2]||''),_hb=_pn.indexOf(' <본방>')>=0;
+        if(_row[41]===1&&!_hb)_row[2]=_pn+' <본방>';
+        else if(_row[41]!==1&&_hb)_row[2]=_pn.replace(/ <본방>$/,'');
+      } else if(_c===3){
+        _row[3]=_one;
+        for(var _d=0;_d<7;_d++)_row[11+_d]=(_PV_DOW[_d]===_one)?1:0;
+        _row[31]=(_one==='토'||_one==='일')?'주말':(_one?'주중':'');
+      } else if(_c===0){
+        _row[0]=_one; _row[29]=getBroadcastType(_one);
       } else _row[_c]=_one;
     });
     renderLivePreview();
@@ -8730,6 +8836,7 @@ function _pvBindDelegation(){
       pvRowCheckToggle(e,cb,+cb.getAttribute('data-absidx'));
       return;
     }
+    if(e.target&&e.target.tagName==='SELECT')return;   /* 드롭다운 조작은 그대로 통과 */
     var c=td(e); if(!c)return;
     if(c.classList.contains('pv-row-num'))return;      /* 행번호 칸은 클릭 동작 없음 */
     pvCellClick(e,c);
@@ -8738,12 +8845,14 @@ function _pvBindDelegation(){
   wrap.addEventListener('dblclick',function(e){
     var c=td(e); if(!c)return;
     var col=c.getAttribute('data-col'); if(col==null)return;
+    if(_PV_SELECT_COLS.indexOf(+col)>=0)return;        /* 드롭다운 열은 편집 대신 선택 */
     if(col==='2')pvCellDblClick(c,ri(c));
     else pvGenCellDblClick(c,ri(c),+col);
   });
 
   wrap.addEventListener('mousedown',function(e){
     if(e.target&&e.target.classList&&e.target.classList.contains('pv-rowcheck')){ e.stopPropagation(); return; }
+    if(e.target&&e.target.tagName==='SELECT')return;
     var c=td(e); if(!c)return;
     if(c.classList.contains('pv-row-num'))return;
     pvCellMouseDown(e,c);
@@ -8757,6 +8866,7 @@ function _pvBindDelegation(){
 
   wrap.addEventListener('change',function(e){
     var el=e.target;
+    if(el&&el.classList&&el.classList.contains('pv-cell-sel')){ pvChangeSelectCell(el); return; }
     if(el&&el.classList&&el.classList.contains('pv-bonbang-sel')){
       var c=el; while(c&&c.tagName!=='TD')c=c.parentNode;
       pvChangeBonbang(el,c?ri(c):+el.getAttribute('data-row'));

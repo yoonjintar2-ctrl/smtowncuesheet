@@ -2869,6 +2869,91 @@ function renderPivotBuilder(){
   h+='<div style="margin-top:10px;overflow:auto">'+_pivotTableHTML()+'</div></div>';
   return h;
 }
+function _pvNum(r,i){ return parseFloat(String(r[i]==null?'':r[i]).replace(/[^0-9.\-]/g,''))||0; }
+function _pivotModel(){
+  var cfg=_pivotCfgInit();
+  var rows=(typeof filterLiveRowsByPV==='function')?filterLiveRowsByPV((_liveRows||[]).slice(1)):((_liveRows||[]).slice(1));
+  rows=_pvApplyFilters(rows);
+  var rmap={},rorder=[];
+  rows.forEach(function(r){ var k=cfg.rows.map(function(i){return String(r[i]==null?'':r[i]);}); var kk=k.join(''); if(!(kk in rmap)){rmap[kk]={k:k,rows:[]};rorder.push(kk);} rmap[kk].rows.push(r); });
+  rorder.sort(function(a,b){ var ca=rmap[a].k,cb=rmap[b].k; for(var i=0;i<ca.length;i++){ if(ca[i]!==cb[i]){ var f=cfg.rows[i]; return (typeof _pvCmpVal==='function')?_pvCmpVal(f,ca[i],cb[i]):String(ca[i]).localeCompare(cb[i],'ko'); } } return 0; });
+  var tokens=cfg.cols.slice();
+  function tokSpecs(tok){ if(tok==='dow'||tok==='week'){ return _PV_GROUPS[tok].subs.map(function(s){return {label:s[1],src:s[0]};}); } var f=+tok; return _pvDistinctRows(rows,f).map(function(v){return {label:v,f:f,val:v,src:cfg.val};}); }
+  function buildBlock(toks){ var lists=toks.map(tokSpecs); var combos=[[]]; lists.forEach(function(sp){ var nc=[]; combos.forEach(function(cmb){ sp.forEach(function(s){ nc.push(cmb.concat([s])); }); }); combos=nc; }); var leaves=combos.map(function(cmb){ var src=cfg.val,preds=[]; cmb.forEach(function(s){ if(s.f!=null)preds.push({f:s.f,val:s.val}); else src=s.src; }); return {label:cmb.map(function(s){return s.label;}).join(' ▸ '),src:src,preds:preds}; }); return {title:toks.map(_pvTokLabel).join(' ▸ '),leaves:leaves}; }
+  var blocks=[];
+  if(!tokens.length){ blocks.push({title:_PV_VALS[cfg.val],leaves:[{label:'값',src:cfg.val,preds:[]}]}); }
+  else { var grp=[]; tokens.forEach(function(tok,idx){ var j=cfg.colJoin?cfg.colJoin[tok]:null; if(idx===0||j!=='flat'){ grp.push(tok); } else { blocks.push(buildBlock(grp)); grp=[tok]; } }); if(grp.length)blocks.push(buildBlock(grp)); }
+  blocks.forEach(function(b){ b.cells={}; b.rowTot={}; b.colTot=b.leaves.map(function(){return 0;}); b.grand=0; b.align=b.leaves.some(function(lf){return lf.src===9;})?'right':'center'; });
+  rorder.forEach(function(rk){ var grp=rmap[rk].rows; blocks.forEach(function(b){ var arr=b.leaves.map(function(){return 0;}),tot=0; grp.forEach(function(r){ b.leaves.forEach(function(lf,li){ var ok=true; for(var p=0;p<lf.preds.length;p++){ if(String(r[lf.preds[p].f]==null?'':r[lf.preds[p].f])!==lf.preds[p].val){ok=false;break;} } if(ok)arr[li]+=_pvNum(r,lf.src); }); }); b.leaves.forEach(function(lf,li){ tot+=arr[li]; b.colTot[li]+=arr[li]; }); b.cells[rk]=arr; b.rowTot[rk]=tot; b.grand+=tot; }); });
+  return {cfg:cfg,rmap:rmap,rorder:rorder,blocks:blocks};
+}
+function _pvFmt(v,rowBase,colBase,pct){ if(pct==='row')return rowBase>0?(Math.round(v/rowBase*1000)/10)+'%':'0%'; if(pct==='col')return colBase>0?(Math.round(v/colBase*1000)/10)+'%':'0%'; return (Math.round(v*100)/100).toLocaleString(); }
+function _pivotTableHTML(){
+  var cfg=_pivotCfgInit();
+  if(!cfg.rows.length)return '<div style="color:#999;font-size:.72rem">행 필드를 1개 이상 선택하세요.</div>';
+  var M=_pivotModel(), blocks=M.blocks, rorder=M.rorder, rmap=M.rmap, nf=cfg.rows.length, pct=cfg.pct;
+  var CH=cfg.colors.header,CS=cfg.colors.sub,CG=cfg.colors.grand, TH=_pvTextColor(CH),TS=_pvTextColor(CS),TG=_pvTextColor(CG),bd='#c9c9cf';
+  var valLabel=_PV_VALS[cfg.val]||'값';
+  var cap='<div style="text-align:right;font-size:.7rem;color:#555;margin-bottom:3px">값: <b>'+esc(valLabel)+'</b>'+(pct!=='none'?' · '+(pct==='row'?'행 기준 %':'열 기준 %'):'')+'</div>';
+  var hstyle='border:1px solid '+bd+';background:'+CH+';color:'+TH+';padding:3px 9px;text-align:center;font-weight:600';
+  var t='<table style="border-collapse:collapse;font-size:.72rem;white-space:nowrap"><thead><tr>';
+  cfg.rows.forEach(function(i){ t+='<th rowspan="2" style="'+hstyle+';position:sticky;top:0">'+esc(OUT_COLS[i])+'</th>'; });
+  blocks.forEach(function(b){ t+='<th colspan="'+(b.leaves.length+1)+'" style="'+hstyle+'">'+esc(b.title)+'</th>'; });
+  t+='</tr><tr>';
+  blocks.forEach(function(b){ b.leaves.forEach(function(lf){ t+='<th style="'+hstyle+'">'+esc(lf.label)+'</th>'; }); t+='<th style="'+hstyle+'">합계</th>'; });
+  t+='</tr></thead><tbody>';
+  var subPos=(cfg.subFields||[]).map(function(f){return cfg.rows.indexOf(f);}).filter(function(p){return p>=0;});
+  subPos=subPos.filter(function(v,i){return subPos.indexOf(v)===i;}).sort(function(a,b){return a-b;});
+  var inner=subPos.length?subPos[subPos.length-1]:-1;
+  function segKey(k){ return inner>=0?k.slice(0,inner+1).join(''):'__all__'; }
+  var segments=[],cur=null,curKey=null;
+  rorder.forEach(function(rk){ var sk=segKey(rmap[rk].k); if(sk!==curKey){ cur=[]; segments.push(cur); curKey=sk; } cur.push(rk); });
+  function align(a){ return 'text-align:'+a; }
+  function subtotalRow(pos,rkeys){ var lbl=rmap[rkeys[0]].k[pos]; var s='<tr style="background:'+CS+';color:'+TS+';font-weight:600"><td colspan="'+nf+'" style="border:1px solid '+bd+';padding:2px 9px;text-align:center">▸ '+esc(lbl)+' 소계</td>'; blocks.forEach(function(b){ var sub=b.leaves.map(function(){return 0;}),stot=0; rkeys.forEach(function(rk){ b.cells[rk].forEach(function(v,li){sub[li]+=v;}); stot+=b.rowTot[rk]; }); b.leaves.forEach(function(lf,li){ s+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(sub[li],stot,b.colTot[li],pct)+'</td>'; }); s+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(stot,stot,b.grand,pct)+'</td>'; }); return s+'</tr>'; }
+  var acc={}; subPos.forEach(function(p){acc[p]=[];});
+  segments.forEach(function(seg,si){
+    var keys=seg.map(function(rk){return rmap[rk].k;});
+    var span=[]; for(var r=0;r<keys.length;r++)span.push([]);
+    for(var ci=0;ci<nf;ci++){ if(cfg.rows[ci]===4||cfg.rows[ci]===5){ for(var r=0;r<keys.length;r++)span[r][ci]=1; continue; } var r=0; while(r<keys.length){ var pref=keys[r].slice(0,ci+1).join(''); var e=r+1; while(e<keys.length&&keys[e].slice(0,ci+1).join('')===pref)e++; span[r][ci]=e-r; for(var q=r+1;q<e;q++)span[q][ci]=0; r=e; } }
+    seg.forEach(function(rk,ri){ var kk=rmap[rk].k; t+='<tr>';
+      for(var ci=0;ci<nf;ci++){ if(span[ri][ci]>0){ t+='<td'+(span[ri][ci]>1?' rowspan="'+span[ri][ci]+'"':'')+' style="border:1px solid '+bd+';padding:2px 9px;text-align:center;vertical-align:top">'+esc(kk[ci])+'</td>'; } }
+      blocks.forEach(function(b){ var arr=b.cells[rk]; b.leaves.forEach(function(lf,li){ var v=arr[li]; t+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+((v||pct==='none')?_pvFmt(v,b.rowTot[rk],b.colTot[li],pct):'')+'</td>'; }); t+='<td style="border:1px solid '+bd+';padding:2px 9px;font-weight:600;'+align(b.align)+'">'+_pvFmt(b.rowTot[rk],b.rowTot[rk],b.grand,pct)+'</td>'; });
+      t+='</tr>';
+    });
+    subPos.forEach(function(p){ seg.forEach(function(rk){acc[p].push(rk);}); });
+    var nextK=(si+1<segments.length)?rmap[segments[si+1][0]].k:null, curK=rmap[seg[0]].k;
+    subPos.slice().sort(function(a,b){return b-a;}).forEach(function(p){ var closing=!nextK||nextK.slice(0,p+1).join('')!==curK.slice(0,p+1).join(''); if(closing){ t+=subtotalRow(p,acc[p]); acc[p]=[]; } });
+  });
+  t+='<tr style="background:'+CG+';color:'+TG+';font-weight:700"><td colspan="'+nf+'" style="border:1px solid '+bd+';padding:2px 9px;text-align:center">총합계</td>';
+  blocks.forEach(function(b){ b.leaves.forEach(function(lf,li){ t+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(b.colTot[li],b.grand,b.colTot[li],pct)+'</td>'; }); t+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(b.grand,b.grand,b.grand,pct)+'</td>'; });
+  t+='</tr></tbody></table>';
+  return cap+t;
+}
+function pivotExportExcel(){
+  if(typeof XLSX==='undefined'){alert('엑셀 모듈을 불러오지 못했습니다.');return;}
+  var cfg=_pivotCfgInit(); if(!cfg.rows.length){alert('행 필드를 선택하세요.');return;}
+  var M=_pivotModel(), blocks=M.blocks, rorder=M.rorder, rmap=M.rmap, nf=cfg.rows.length;
+  var aoa=[],merges=[];
+  var row0=[],row1=[]; cfg.rows.forEach(function(i){ row0.push(OUT_COLS[i]); row1.push(''); });
+  var col=nf;
+  blocks.forEach(function(b){ row0.push(b.title); for(var j=1;j<b.leaves.length+1;j++)row0.push(''); merges.push({s:{r:0,c:col},e:{r:0,c:col+b.leaves.length}}); b.leaves.forEach(function(lf){row1.push(lf.label);}); row1.push('합계'); col+=b.leaves.length+1; });
+  cfg.rows.forEach(function(i,ci){ merges.push({s:{r:0,c:ci},e:{r:1,c:ci}}); });
+  aoa.push(row0); aoa.push(row1);
+  var subPos=(cfg.subFields||[]).map(function(f){return cfg.rows.indexOf(f);}).filter(function(p){return p>=0;});
+  subPos=subPos.filter(function(v,i){return subPos.indexOf(v)===i;}).sort(function(a,b){return a-b;});
+  var inner=subPos.length?subPos[subPos.length-1]:-1;
+  function segKey(k){ return inner>=0?k.slice(0,inner+1).join(''):'__all__'; }
+  var segs=[],cur=null,ck=null;
+  rorder.forEach(function(rk){ var sk=segKey(rmap[rk].k); if(sk!==ck){cur=[];segs.push(cur);ck=sk;} cur.push(rk); });
+  function subRow(pos,rkeys){ var lbl=rmap[rkeys[0]].k[pos]; var r=[]; for(var i=0;i<nf;i++)r.push(i===0?('▸ '+lbl+' 소계'):''); blocks.forEach(function(b){ var sub=b.leaves.map(function(){return 0;}),stot=0; rkeys.forEach(function(rk){ b.cells[rk].forEach(function(v,li){sub[li]+=v;}); stot+=b.rowTot[rk]; }); sub.forEach(function(v){r.push(v);}); r.push(stot); }); return r; }
+  var acc={}; subPos.forEach(function(p){acc[p]=[];});
+  segs.forEach(function(seg,si){ var keys=seg.map(function(rk){return rmap[rk].k;}); var span=[]; for(var _r=0;_r<keys.length;_r++)span.push([]); for(var ci=0;ci<nf;ci++){ var _r=0; while(_r<keys.length){ var pref=keys[_r].slice(0,ci+1).join('\u0001'); var _e=_r+1; while(_e<keys.length&&keys[_e].slice(0,ci+1).join('\u0001')===pref)_e++; span[_r][ci]=_e-_r; for(var _q=_r+1;_q<_e;_q++)span[_q][ci]=0; _r=_e; } } var baseRow=aoa.length; seg.forEach(function(rk,ri){ var kk=rmap[rk].k; var r=[]; for(var ci=0;ci<nf;ci++){ if(span[ri][ci]>0){ r.push(kk[ci]); if(span[ri][ci]>1)merges.push({s:{r:baseRow+ri,c:ci},e:{r:baseRow+ri+span[ri][ci]-1,c:ci}}); } else { r.push(''); } } blocks.forEach(function(b){ b.cells[rk].forEach(function(v){r.push(v);}); r.push(b.rowTot[rk]); }); aoa.push(r); }); subPos.forEach(function(p){seg.forEach(function(rk){acc[p].push(rk);});}); var nextK=(si+1<segs.length)?rmap[segs[si+1][0]].k:null, curK=rmap[seg[0]].k; subPos.slice().sort(function(a,b){return b-a;}).forEach(function(p){ var closing=!nextK||nextK.slice(0,p+1).join('')!==curK.slice(0,p+1).join(''); if(closing){ aoa.push(subRow(p,acc[p])); acc[p]=[]; } }); });
+  var gr=[]; for(var i=0;i<nf;i++)gr.push(i===0?'총합계':''); blocks.forEach(function(b){ b.colTot.forEach(function(v){gr.push(v);}); gr.push(b.grand); }); aoa.push(gr);
+  var _mx=0; aoa.forEach(function(r){ if(r&&r.length>_mx)_mx=r.length; });
+  var _cols=[]; for(var _i=0;_i<_mx;_i++)_cols.push(_i<nf?18:13);
+  exportAOAStyled(aoa,merges,{cols:_cols,headerRows:2,name:'피벗',
+    file:'피벗요약_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx'});
+}
 function renderSummaryTab(){
   try{ syncSettingsQuiet(); }catch(e){}   /* 요약 설정도 계정에 저장 */
   var el=document.getElementById('summaryTabBody');

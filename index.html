@@ -2646,230 +2646,113 @@ function summaryDataToHTML(data){
 }
 
 /* ═══ 요약 피벗 빌더 v3 (열 계층/나열·묶음필드·자동폰트색·엑셀·단일필터) ═══ */
+/* ═══════════ 피벗 v6 : 행(가로 나열) / 열 & 값 설정 / 값 다중·텍스트 지원 ═══════════ */
 var _PV_VALS={9:'단가',10:'횟수'};
-/* 값 선택지: 소스 컬럼 + 백분율 여부(%는 항상 행 기준) */
-var _PV_VALOPTS=[
-  {id:'cnt',   src:10, pct:false, label:'횟수 (회)'},
-  {id:'price', src:9,  pct:false, label:'단가 (원)'},
-  {id:'cntPct',src:10, pct:true,  label:'횟수 (%)'},
-  {id:'prcPct',src:9,  pct:true,  label:'단가 (%)'}
+/* 값 종류: agg='sum'(숫자 합계) | 'text'(문자 표시) ; pct=true면 행 합계 대비 % */
+var _PV_VALDEFS=[
+  {type:'cnt',     label:'횟수 (회)',   src:10, agg:'sum'},
+  {type:'price',   label:'단가 (원)',   src:9,  agg:'sum'},
+  {type:'cntPct',  label:'횟수 (%)',    src:10, agg:'sum', pct:true},
+  {type:'prcPct',  label:'단가 (%)',    src:9,  agg:'sum', pct:true},
+  {type:'cmorder', label:'CM 순서',     src:51, agg:'text'},
+  {type:'item',    label:'품목',        src:1,  agg:'text'},
+  {type:'soje',    label:'소재',        src:53, agg:'text'},
+  {type:'itemsoje',label:'[품목]소재',  agg:'text', combo:true},
+  {type:'exec',    label:'집행일',      src:21, agg:'text', date:true},
+  {type:'custom',  label:'커스텀 값',   agg:'custom'}
 ];
-function _pvValOpt(id){ for(var i=0;i<_PV_VALOPTS.length;i++)if(_PV_VALOPTS[i].id===id)return _PV_VALOPTS[i]; return _PV_VALOPTS[0]; }
-/* 색상 조합 프리셋 (헤더 / 소계 / 총합) */
+function _pvValDef(t){ for(var i=0;i<_PV_VALDEFS.length;i++)if(_PV_VALDEFS[i].type===t)return _PV_VALDEFS[i]; return _PV_VALDEFS[0]; }
+function _pvValLabel(v){
+  var d=_pvValDef(v.type);
+  if(v.type==='custom'){ var c=_pivotCfgInit().customVal||{}; return (c.label||OUT_COLS[c.col]||'커스텀')+(c.agg==='sum'?' (합계)':''); }
+  return d.label;
+}
 var _PV_COLOR_PRESETS=[
-  {id:'gray',  name:'무채색',   header:'#595959', sub:'#d9d9d9', grand:'#bfbfbf'},
-  {id:'blue',  name:'블루',     header:'#1f4e79', sub:'#dce6f1', grand:'#b8cce4'},
-  {id:'green', name:'그린',     header:'#375623', sub:'#e2efda', grand:'#c6e0b4'},
-  {id:'warm',  name:'웜 그레이',header:'#5a4a42', sub:'#efe7e1', grand:'#d9c9bf'},
-  {id:'navy',  name:'딥 네이비',header:'#1c2b4a', sub:'#e4e8f0', grand:'#c2cbdd'}
+  {id:'gray',  name:'무채색',    header:'#595959', sub:'#d9d9d9', grand:'#bfbfbf'},
+  {id:'blue',  name:'블루',      header:'#1f4e79', sub:'#dce6f1', grand:'#b8cce4'},
+  {id:'green', name:'그린',      header:'#375623', sub:'#e2efda', grand:'#c6e0b4'},
+  {id:'warm',  name:'웜 그레이', header:'#5a4a42', sub:'#efe7e1', grand:'#d9c9bf'},
+  {id:'navy',  name:'딥 네이비', header:'#1c2b4a', sub:'#e4e8f0', grand:'#c2cbdd'}
 ];
 function _pvPreset(id){ for(var i=0;i<_PV_COLOR_PRESETS.length;i++)if(_PV_COLOR_PRESETS[i].id===id)return _PV_COLOR_PRESETS[i]; return _PV_COLOR_PRESETS[0]; }
 function pivotSetPreset(id){ var c=_pivotCfgInit(); var p=_pvPreset(id); c.preset=p.id; c.colors={header:p.header,sub:p.sub,grand:p.grand}; renderSummaryTab(); }
-function pivotSetValOpt(id){ var c=_pivotCfgInit(); var o=_pvValOpt(id); c.valOpt=o.id; c.val=o.src; c.pct=o.pct?'row':'none'; renderSummaryTab(); }
-var _PV_GROUPS={ dow:{label:'요일 묶음', subs:[[11,'월'],[12,'화'],[13,'수'],[14,'목'],[15,'금'],[16,'토'],[17,'일']]}, week:{label:'주차 묶음', subs:[[22,'1주'],[23,'2주'],[24,'3주'],[25,'4주'],[26,'5주'],[27,'6주']]} };
-var _PV_ROW_EXCLUDE=[3,9,10,11,12,13,14,15,16,17,22,23,24,25,26,27,34,35,36,41,54];
-var _PV_COL_EXCLUDE=[0,2,4,5,7,9,10,11,12,13,14,15,16,17,19,20,21,22,23,24,25,26,27,33,34,35,36,54];
+
+/* 행: 요일(3) 사용 가능. 열: 주차 구분(숫자,34) 사용 가능(주차별 1열), 주차 묶음 제거 */
+var _PV_ROW_EXCLUDE=[9,10,11,12,13,14,15,16,17,22,23,24,25,26,27,35,36,41,54];
+var _PV_COL_EXCLUDE=[2,4,5,7,9,10,11,12,13,14,15,16,17,19,20,21,22,23,24,25,26,27,35,36,54];
 function _pivotFlds(){ var a=[]; for(var i=0;i<OUT_COLS.length;i++){ if(_HIDDEN_COLS.indexOf(i)<0)a.push(i); } return a; }
 function _pivotRowFlds(){ return _pivotFlds().filter(function(i){return _PV_ROW_EXCLUDE.indexOf(i)<0;}); }
-function _pivotColItems(){ var a=['week']; _pivotFlds().forEach(function(i){ if(_PV_COL_EXCLUDE.indexOf(i)<0)a.push(i); }); return a; }
-function _pvTokLabel(t){ return (t==='dow'||t==='week')?_PV_GROUPS[t].label:OUT_COLS[+t]; }
-function _pivotDefaults(){ return {rows:[2],cols:[],colMode:'nest',val:10,pct:'none',subField:-1,colors:{header:'#595959',sub:'#d9d9d9',grand:'#bfbfbf'},filters:{},colOrder:null}; }
-function _pivotCfgInit(){ if(!window._pivotCfg)window._pivotCfg=_pivotDefaults(); var c=window._pivotCfg; if(!c.colors||!c.colors.header)c.colors={header:'#595959',sub:'#d9d9d9',grand:'#bfbfbf'}; if(!c.filters)c.filters={}; if(c.pct===true)c.pct='row'; if(!c.pct||c.pct===false)c.pct='none'; if(!c.cols)c.cols=[]; if(!c.rows)c.rows=[2]; if(!c.colMode)c.colMode='nest'; if(c.val!==9&&c.val!==10)c.val=10;
-  if(!c.valOpt){ c.valOpt=(c.val===9?(c.pct==='row'?'prcPct':'price'):(c.pct==='row'?'cntPct':'cnt')); }
-  var _vo=_pvValOpt(c.valOpt); c.val=_vo.src; c.pct=_vo.pct?'row':'none';   /* %는 항상 행 기준 */
-  if(!c.preset)c.preset='gray'; if(!c.colJoin){ c.colJoin={}; (c.cols||[]).forEach(function(t){ c.colJoin[t]=(c.colMode==='flat')?'flat':'nest'; }); } if(!c.subFields){ c.subFields=(c.subField>=0)?[c.subField]:[]; } return c; }
-function pivotSetJoin(tok,v){ _pivotCfgInit().colJoin[tok]=v; renderSummaryTab(); }
-function pivotToggleSub(i,on){ var c=_pivotCfgInit(); if(!c.subFields)c.subFields=[]; var p=c.subFields.indexOf(i); if(on){if(p<0)c.subFields.push(i);}else{if(p>=0)c.subFields.splice(p,1);} renderSummaryTab(); }
+function _pivotColItems(){ return _pivotFlds().filter(function(i){return _PV_COL_EXCLUDE.indexOf(i)<0;}); }
+function _pvTokLabel(t){ return OUT_COLS[+t]; }
+/* 값이 위/아래 행과 같아도 병합하지 않고 반복 표시할 행 필드: 시작시간·종료시간·시급 */
+var _PV_NOMERGE_ROWS=[4,5,6];
+
+function _pivotDefaults(){
+  return {rows:[2],cols:[],colJoin:{},vals:[{uid:'v1',type:'cnt'}],subFields:[],
+          preset:'gray',colors:{header:'#595959',sub:'#d9d9d9',grand:'#bfbfbf'},
+          filters:{},customVal:{col:9,agg:'sum',label:''}};
+}
+function _pivotCfgInit(){
+  if(!window._pivotCfg)window._pivotCfg=_pivotDefaults();
+  var c=window._pivotCfg;
+  if(!c.colors||!c.colors.header)c.colors={header:'#595959',sub:'#d9d9d9',grand:'#bfbfbf'};
+  if(!c.preset)c.preset='gray';
+  if(!c.filters)c.filters={};
+  if(!c.rows)c.rows=[2];
+  if(!c.cols)c.cols=[];
+  if(!c.customVal)c.customVal={col:9,agg:'sum',label:''};
+  /* 구버전 cfg 마이그레이션: 단일 val/valOpt → vals 배열 */
+  if(!Array.isArray(c.vals)||!c.vals.length){
+    var t='cnt';
+    if(c.valOpt)t=c.valOpt==='prcPct'?'prcPct':c.valOpt==='cntPct'?'cntPct':c.valOpt==='price'?'price':'cnt';
+    else if(c.val===9)t=(c.pct==='row')?'prcPct':'price';
+    else t=(c.pct==='row')?'cntPct':'cnt';
+    c.vals=[{uid:'v1',type:t}];
+  }
+  c.vals.forEach(function(v,i){ if(!v.uid)v.uid='v'+(i+1)+'_'+Date.now(); });
+  /* 주차 묶음/요일 묶음 토큰 제거(구버전 호환) */
+  c.cols=c.cols.filter(function(t){ return t!=='week'&&t!=='dow'; });
+  c.rows=c.rows.filter(function(t){ return typeof t==='number'; });
+  if(!c.colJoin)c.colJoin={};
+  c.cols.forEach(function(t){ var j=c.colJoin[t]; if(j!=='beside'&&j!=='below')c.colJoin[t]=(j==='flat')?'beside':'below'; });
+  if(!c.subFields)c.subFields=(c.subField>=0)?[c.subField]:[];
+  c.subFields=c.subFields.filter(function(i){return c.rows.indexOf(i)>=0;});
+  return c;
+}
 function _pvTextColor(bg){ var m=/#?([0-9a-fA-F]{6})/.exec(bg||''); if(!m)return '#000'; var n=parseInt(m[1],16),r=(n>>16)&255,g=(n>>8)&255,b=n&255; return ((0.299*r+0.587*g+0.114*b)/255)<0.58?'#fff':'#000'; }
-function pivotToggleField(kind,tok,on){ var c=_pivotCfgInit(); var arr=kind==='row'?c.rows:c.cols; var p=arr.indexOf(tok); if(on){if(p<0)arr.push(tok);}else{if(p>=0)arr.splice(p,1);} if(kind==='col')c.colOrder=null; if(c.subField>=0&&c.rows.indexOf(c.subField)<0)c.subField=-1; renderSummaryTab(); }
-function pivotSet(k,v){ _pivotCfgInit()[k]=v; renderSummaryTab(); }
-function pivotSetColor(k,v){ _pivotCfgInit().colors[k]=v; renderSummaryTab(); }
+function _pvNum(r,i){ return parseFloat(String(r[i]==null?'':r[i]).replace(/[^0-9.\-]/g,''))||0; }
 function _pvDistinct(col){ var s={},o=[]; (_liveRows||[]).slice(1).forEach(function(r){ var v=col===33?String(r[33]||'').replace(/^\d+\)\s*/,''):String(r[col]==null?'':r[col]); if(v&&!s[v]){s[v]=1;o.push(v);} }); o.sort(function(a,b){return (typeof _pvCmpVal==='function')?_pvCmpVal(col,a,b):String(a).localeCompare(b,'ko');}); return o; }
 function _pvDistinctRows(rows,col){ var s={},o=[]; rows.forEach(function(r){ var v=String(r[col]==null?'':r[col]); if(v!==''&&!s[v]){s[v]=1;o.push(v);} }); o.sort(function(a,b){return (typeof _pvCmpVal==='function')?_pvCmpVal(col,a,b):String(a).localeCompare(b,'ko');}); return o; }
 function _pvApplyFilters(rows){ var f=_pivotCfgInit().filters||{}; return rows.filter(function(r){ for(var col in f){ var sel=f[col]; if(!sel)continue; var cc=+col; var v=cc===33?String(r[33]||'').replace(/^\d+\)\s*/,''):String(r[cc]==null?'':r[cc]); if(v!==sel)return false; } return true; }); }
-function pivotFilterChange(col,v){ if(v==='')delete _pivotCfgInit().filters[col]; else _pivotCfgInit().filters[col]=v; renderSummaryTab(); }
-function pivotChipDragStart(e,kind,i){ window._pvChip={kind:kind,i:i}; if(e.dataTransfer)e.dataTransfer.effectAllowed='move'; }
-function pivotChipOver(e,el){ if(e.preventDefault)e.preventDefault(); el.style.boxShadow='inset 5px 0 0 #0068b5'; }
-function pivotChipLeave(e,el){ el.style.boxShadow=''; }
-function pivotChipDrop(e,kind,i){ if(e.preventDefault)e.preventDefault(); var s=window._pvChip; window._pvChip=null; if(!s||s.kind!==kind)return; var c=_pivotCfgInit(); var arr=(kind==='row'?c.rows:c.cols).slice(); var fi=arr.indexOf(s.i); if(fi<0)return; arr.splice(fi,1); var ti=arr.indexOf(i); if(ti<0)ti=arr.length; arr.splice(ti,0,s.i); if(kind==='row')c.rows=arr; else c.cols=arr; renderSummaryTab(); }
-function pivotColStructDragStart(e,tok){ window._pvCSDrag=tok; if(e.dataTransfer)e.dataTransfer.effectAllowed='move'; }
-function pivotColStructOver(e,el){ if(e.preventDefault)e.preventDefault(); var rect=el.getBoundingClientRect(); var right=(e.clientX-rect.left)>rect.width/2; /* 오른쪽에 놓으면 '옆에 나열'(flat), 왼쪽에 놓으면 '하위 계층'(nest) */ el.style.boxShadow=right?'inset -5px 0 0 #16a34a':'inset 5px 0 0 #0068b5'; el.setAttribute('data-zone',right?'flat':'nest'); }
-function pivotColStructLeave(e,el){ el.style.boxShadow=''; }
-function pivotColStructDrop(e,el,targetTok){ if(e.preventDefault)e.preventDefault(); var zone=el.getAttribute('data-zone')||'nest'; el.style.boxShadow=''; var drag=window._pvCSDrag; window._pvCSDrag=null; if(drag==null||drag===targetTok)return; var c=_pivotCfgInit(); var cols=c.cols.slice(); var fi=cols.indexOf(drag); if(fi<0)return; cols.splice(fi,1); var ti=cols.indexOf(targetTok); cols.splice(ti+1,0,drag); c.cols=cols; if(!c.colJoin)c.colJoin={}; c.colJoin[drag]=(zone==='nest')?'nest':'flat'; renderSummaryTab(); }
-function pivotSaveTemplate(){ var el=document.getElementById('pvTplName'); var nm=((el&&el.value)||'').trim(); if(!nm){alert('템플릿 이름을 입력하세요.');return;} if(!window._pivotTemplates)window._pivotTemplates=[]; var cfg=JSON.parse(JSON.stringify(_pivotCfgInit())); var ex=window._pivotTemplates.filter(function(t){return t.name===nm;})[0]; if(ex){ if(!confirm('같은 이름의 템플릿을 덮어쓸까요?'))return; ex.cfg=cfg; } else { window._pivotTemplates.push({name:nm,cfg:cfg}); } if(typeof saveRulesToFile==='function'){try{saveRulesToFile();}catch(e){}} renderSummaryTab(); }
-function pivotLoadTemplate(){ var sel=document.getElementById('pvTplSel'); if(!sel||!sel.value)return; window._pvTplSelected=sel.value; var t=(window._pivotTemplates||[]).filter(function(x){return x.name===sel.value;})[0]; if(!t)return; window._pivotCfg=JSON.parse(JSON.stringify(t.cfg)); _pivotCfgInit(); renderSummaryTab(); }
-function pivotDeleteTemplate(){ var sel=document.getElementById('pvTplSel'); if(!sel||!sel.value)return; if(!confirm('템플릿 "'+sel.value+'"를 삭제할까요?'))return; window._pivotTemplates=(window._pivotTemplates||[]).filter(function(x){return x.name!==sel.value;}); if(typeof saveRulesToFile==='function'){try{saveRulesToFile();}catch(e){}} renderSummaryTab(); }
-function _pivotTemplateBar(){
-  var list=window._pivotTemplates||[];
-  var h='<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #ddd;font-size:.72rem;display:flex;flex-wrap:wrap;gap:8px;align-items:center">';
-  h+='<button onclick="pivotExportExcel()" style="font-size:.7rem;padding:3px 10px;border:1px solid #1d7a46;border-radius:5px;background:#eafaf0;color:#1d7a46;font-weight:600;cursor:pointer">⬇ 엑셀 다운로드</button>';
-  h+='<span style="width:10px"></span><b>템플릿</b><input id="pvTplName" placeholder="이름" style="font-size:.7rem;padding:2px 6px;width:100px">';
-  h+='<button onclick="pivotSaveTemplate()" style="font-size:.7rem;padding:3px 9px;border:none;border-radius:5px;background:#0068b5;color:#fff;cursor:pointer">저장</button>';
-  var _cur=window._pvTplSelected||'';
-  h+='<select id="pvTplSel" onchange="pivotLoadTemplate()" title="선택하면 바로 적용됩니다" style="font-size:.7rem"><option value="">(선택)</option>';
-  list.forEach(function(t){ h+='<option value="'+esc(t.name)+'"'+(t.name===_cur?' selected':'')+'>'+esc(t.name)+'</option>'; });
-  h+='</select>';
-  h+='<button onclick="pivotDeleteTemplate()" style="font-size:.7rem;padding:3px 9px;border:1px solid #e0b0b0;border-radius:5px;background:#fff;color:#c0392b;cursor:pointer">삭제</button>';
-  h+='<span style="color:#aaa">저장됨 '+list.length+'개 · 구글 계정에 동기화</span></div>';
-  return h;
-}
-/* ═══ 피벗 빌더 v5: 드래그 기반 필드 배치 ═══
-   왼쪽 '사용 가능한 필드' 목록 → [행 설정] / [열 설정] 박스로 끌어다 놓기.
-   박스 안에서 다시 끌면 순서 변경, 열 박스는 좌/우 드롭으로 계층/나열 지정. */
-function _pvTokKey(t){ return (typeof t==='string')?('s:'+t):('n:'+t); }
-function _pvTokParse(k){ return (k.charAt(0)==='s')?k.slice(2):(+k.slice(2)); }
-function pivotPoolDragStart(e,key){ window._pvDrag={from:'pool',key:key}; if(e.dataTransfer){e.dataTransfer.effectAllowed='copyMove';try{e.dataTransfer.setData('text/plain',key);}catch(_e){}} }
-function pivotZoneDragStart(e,zone,key){ window._pvDrag={from:zone,key:key}; if(e.dataTransfer){e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',key);}catch(_e){}} }
-function pivotZoneOver(e,el){ if(e.preventDefault)e.preventDefault(); if(el)el.style.background='#eaf3fd'; }
-function pivotZoneLeave(e,el){ if(el)el.style.background=''; }
-/* 박스(빈 영역)에 드롭 → 맨 뒤에 추가 */
-function pivotZoneDrop(e,zone){
-  if(e.preventDefault)e.preventDefault(); if(e.stopPropagation)e.stopPropagation();
-  var boxEl=document.getElementById('pvZone-'+zone); if(boxEl)boxEl.style.background='';
-  var d=window._pvDrag; window._pvDrag=null; if(!d)return;
-  var tok=_pvTokParse(d.key); var c=_pivotCfgInit();
-  var allowed=(zone==='row')?_pivotRowFlds():_pivotColItems();
-  if(allowed.indexOf(tok)<0){ alert('이 필드는 '+(zone==='row'?'행':'열')+'에 사용할 수 없습니다.'); renderSummaryTab(); return; }
-  if(d.from==='row')c.rows=c.rows.filter(function(x){return x!==tok;});
-  if(d.from==='col')c.cols=c.cols.filter(function(x){return x!==tok;});
-  var arr=(zone==='row')?c.rows:c.cols;
-  if(arr.indexOf(tok)<0)arr.push(tok);
-  if(zone==='col'){ if(!c.colJoin)c.colJoin={}; if(!c.colJoin[tok])c.colJoin[tok]='nest'; }
-  c.subFields=(c.subFields||[]).filter(function(i){return c.rows.indexOf(i)>=0;});
-  renderSummaryTab();
-}
-/* 칩 위에 드롭 → 그 자리(앞/뒤)로 이동. 열은 왼쪽=하위계층 / 오른쪽=옆에 나열 */
-function pivotChipZoneOver(e,el,zone){
-  if(e.preventDefault)e.preventDefault(); if(e.stopPropagation)e.stopPropagation();
-  var r=el.getBoundingClientRect(); var right=(e.clientX-r.left)>r.width/2;
-  if(zone==='col'){ el.style.boxShadow=right?'inset -5px 0 0 #16a34a':'inset 5px 0 0 #0068b5'; el.setAttribute('data-zone',right?'flat':'nest'); }
-  else { el.style.boxShadow=right?'inset -5px 0 0 #0068b5':'inset 5px 0 0 #0068b5'; }
-  el.setAttribute('data-side',right?'after':'before');
-}
-function pivotChipZoneLeave(e,el){ el.style.boxShadow=''; }
-function pivotChipZoneDrop(e,el,zone,targetKey){
-  if(e.preventDefault)e.preventDefault(); if(e.stopPropagation)e.stopPropagation();
-  var side=el.getAttribute('data-side')||'after'; var join=el.getAttribute('data-zone')||'nest';
-  el.style.boxShadow='';
-  var d=window._pvDrag; window._pvDrag=null; if(!d)return;
-  var tok=_pvTokParse(d.key), target=_pvTokParse(targetKey);
-  if(tok===target)return;
-  var c=_pivotCfgInit();
-  var allowed=(zone==='row')?_pivotRowFlds():_pivotColItems();
-  if(allowed.indexOf(tok)<0){ alert('이 필드는 '+(zone==='row'?'행':'열')+'에 사용할 수 없습니다.'); return; }
-  if(d.from==='row')c.rows=c.rows.filter(function(x){return x!==tok;});
-  if(d.from==='col')c.cols=c.cols.filter(function(x){return x!==tok;});
-  var arr=((zone==='row')?c.rows:c.cols).filter(function(x){return x!==tok;});
-  var ti=arr.indexOf(target); if(ti<0)ti=arr.length-1;
-  arr.splice(side==='after'?ti+1:ti,0,tok);
-  if(zone==='row')c.rows=arr; else { c.cols=arr; if(!c.colJoin)c.colJoin={}; c.colJoin[tok]=join; }
-  c.subFields=(c.subFields||[]).filter(function(i){return c.rows.indexOf(i)>=0;});
-  renderSummaryTab();
-}
-function pivotRemoveField(zone,key){
-  var tok=_pvTokParse(key), c=_pivotCfgInit();
-  if(zone==='row')c.rows=c.rows.filter(function(x){return x!==tok;});
-  else c.cols=c.cols.filter(function(x){return x!==tok;});
-  c.subFields=(c.subFields||[]).filter(function(i){return c.rows.indexOf(i)>=0;});
-  renderSummaryTab();
-}
-function pivotClearZone(zone){ var c=_pivotCfgInit(); if(zone==='row'){c.rows=[];c.subFields=[];} else c.cols=[]; renderSummaryTab(); }
+function pivotFilterChange(col,v){ var c=_pivotCfgInit(); if(v==='')delete c.filters[col]; else c.filters[col]=v; renderSummaryTab(); if(document.getElementById('pvFilterPop'))_pvRenderFilterPop(); }
 
-function renderPivotBuilder(){
-  var cfg=_pivotCfgInit();
-  var K=_pvTokKey;
-  /* ── 사용 가능한 필드 풀(행/열 어디든 쓸 수 있는 항목 전체) ── */
-  function pool(){
-    var rowF=_pivotRowFlds(), colF=_pivotColItems();
-    var seen={}, all=[];
-    rowF.concat(colF).forEach(function(t){ var k=K(t); if(!seen[k]){seen[k]=1;all.push(t);} });
-    var used={}; cfg.rows.forEach(function(t){used[K(t)]=1;}); cfg.cols.forEach(function(t){used[K(t)]=1;});
-    var h='<div style="display:flex;flex-wrap:wrap;gap:4px;max-height:150px;overflow:auto;border:1px solid #e0e0e6;border-radius:6px;padding:7px;background:#fff">';
-    all.forEach(function(t){
-      var k=K(t), isUsed=!!used[k];
-      var canRow=rowF.indexOf(t)>=0, canCol=colF.indexOf(t)>=0;
-      var tip=(canRow&&canCol)?'행·열 모두 가능':(canRow?'행 전용':'열 전용');
-      h+='<span draggable="true" ondragstart="pivotPoolDragStart(event,\''+k+'\')" title="'+tip+' — 끌어서 행/열 박스에 놓으세요"'
-        +' style="padding:3px 10px;border-radius:12px;font-size:.69rem;cursor:grab;border:1px solid '+(isUsed?'#d8d8de':'#c3c9d4')+';'
-        +'background:'+(isUsed?'#f2f2f5':'#fff')+';color:'+(isUsed?'#aaa':'#333')+'">⠿ '+esc(_pvTokLabel(t))+'</span>';
-    });
-    return h+'</div>';
-  }
-  /* ── 행 박스 ── */
-  function rowZone(){
-    var h='<div id="pvZone-row" ondragover="pivotZoneOver(event,this)" ondragleave="pivotZoneLeave(event,this)" ondrop="pivotZoneDrop(event,\'row\')"'
-      +' style="min-height:64px;border:2px dashed #b9c2d0;border-radius:8px;padding:7px;background:#fff;transition:background .12s">';
-    if(!cfg.rows.length)h+='<span style="color:#aaa;font-size:.68rem">여기로 필드를 끌어다 놓으세요 (위 → 아래 순서로 그룹핑)</span>';
-    cfg.rows.forEach(function(t,i){
-      var k=K(t);
-      h+='<div draggable="true" ondragstart="pivotZoneDragStart(event,\'row\',\''+k+'\')" ondragover="pivotChipZoneOver(event,this,\'row\')" ondragleave="pivotChipZoneLeave(event,this)" ondrop="pivotChipZoneDrop(event,this,\'row\',\''+k+'\')"'
-        +' style="display:flex;align-items:center;gap:6px;padding:4px 8px;margin:3px 0;background:#eef2fa;border:1px solid #c3ccdd;border-radius:6px;cursor:grab;font-size:.71rem">'
-        +'<span style="color:#98a;font-size:.62rem;min-width:14px">'+(i+1)+'</span><span style="flex:1">'+esc(_pvTokLabel(t))+'</span>'
-        +'<label style="font-size:.62rem;color:#666;cursor:pointer" title="이 필드마다 소계를 넣습니다"><input type="checkbox" onchange="pivotToggleSub('+(+t)+',this.checked)"'+((cfg.subFields||[]).indexOf(+t)>=0?' checked':'')+' style="vertical-align:middle"> 소계</label>'
-        +'<span onclick="pivotRemoveField(\'row\',\''+k+'\')" title="제거" style="cursor:pointer;color:#c66;font-weight:700;padding:0 3px">✕</span></div>';
-    });
-    return h+'</div>';
-  }
-  /* ── 열 박스 (계층/나열 구조를 그대로 시각화) ── */
-  function colZone(){
-    var h='<div id="pvZone-col" ondragover="pivotZoneOver(event,this)" ondragleave="pivotZoneLeave(event,this)" ondrop="pivotZoneDrop(event,\'col\')"'
-      +' style="min-height:64px;border:2px dashed #b9c2d0;border-radius:8px;padding:7px;background:#fff;transition:background .12s">';
-    if(!cfg.cols.length){ h+='<span style="color:#aaa;font-size:.68rem">여기로 필드를 끌어다 놓으세요 (비우면 값 한 열만 표시)</span>'; return h+'</div>'; }
-    var groups=[],g=[];
-    cfg.cols.forEach(function(tok,idx){ var j=cfg.colJoin?cfg.colJoin[tok]:null; if(idx===0||j!=='flat'){g.push(tok);}else{groups.push(g);g=[tok];} });
-    if(g.length)groups.push(g);
-    h+='<div style="display:flex;flex-wrap:wrap;gap:9px;align-items:flex-start">';
-    groups.forEach(function(grp){
-      h+='<div style="border:1px dashed #c9cfda;border-radius:7px;padding:4px 6px;background:#fbfcfe">';
-      grp.forEach(function(tok,gi){
-        var k=K(tok);
-        h+='<div draggable="true" ondragstart="pivotZoneDragStart(event,\'col\',\''+k+'\')" ondragover="pivotChipZoneOver(event,this,\'col\')" ondragleave="pivotChipZoneLeave(event,this)" ondrop="pivotChipZoneDrop(event,this,\'col\',\''+k+'\')"'
-          +' style="display:flex;align-items:center;gap:5px;padding:3px 8px;margin:3px 0 3px '+(gi*14)+'px;background:#eef2fa;border:1px solid #c3ccdd;border-radius:6px;cursor:grab;font-size:.71rem;white-space:nowrap">'
-          +(gi?'<span style="color:#98a">▸</span>':'')+'<span>'+esc(_pvTokLabel(tok))+'</span>'
-          +'<span onclick="pivotRemoveField(\'col\',\''+k+'\')" title="제거" style="cursor:pointer;color:#c66;font-weight:700;padding:0 2px">✕</span></div>';
-      });
-      h+='</div>';
-    });
-    return h+'</div></div>';
-  }
-
-  var h='<div style="border:1px solid #d8d8de;border-radius:8px;padding:11px 13px;margin-bottom:12px;background:#fafafd">';
-  h+='<div style="font-weight:700;font-size:.82rem;margin-bottom:7px">🧮 피벗 요약 <span style="font-weight:400;color:#888;font-size:.7rem">· 현재 큐시트 필터 기준</span></div>';
-
-  h+='<div style="font-size:.72rem;margin-bottom:4px"><b>사용 가능한 필드</b> <span style="color:#999;font-size:.66rem">— 아래 행/열 박스로 끌어다 놓으세요</span></div>';
-  h+=pool();
-
-  h+='<div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap">';
-  h+='<div style="flex:1 1 320px;min-width:280px"><div style="font-size:.72rem;margin-bottom:3px;display:flex;align-items:center"><b>행 설정</b><span style="color:#999;font-size:.65rem;margin-left:6px">위→아래 = 바깥→안쪽 그룹</span><button onclick="pivotClearZone(\'row\')" class="pv-tbtn" style="margin-left:auto;font-size:.62rem;padding:1px 7px">비우기</button></div>'+rowZone()+'</div>';
-  h+='<div style="flex:1 1 320px;min-width:280px"><div style="font-size:.72rem;margin-bottom:3px;display:flex;align-items:center"><b>열 설정</b><span style="color:#999;font-size:.65rem;margin-left:6px">칩 <b style="color:#0068b5">왼쪽</b>=하위계층 / <b style="color:#16a34a">오른쪽</b>=옆에 나열</span><button onclick="pivotClearZone(\'col\')" class="pv-tbtn" style="margin-left:auto;font-size:.62rem;padding:1px 7px">비우기</button></div>'+colZone()+'</div>';
-  h+='</div>';
-
-  /* 값 · 색상 · 필터 */
-  h+='<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;margin-top:11px;font-size:.72rem">';
-  h+='<div><div style="font-weight:600;margin-bottom:3px">값</div><select onchange="pivotSetValOpt(this.value)" style="font-size:.71rem;padding:2px 6px">';
-  _PV_VALOPTS.forEach(function(o){ h+='<option value="'+o.id+'"'+(cfg.valOpt===o.id?' selected':'')+'>'+o.label+'</option>'; });
-  h+='</select><div style="color:#999;font-size:.63rem;margin-top:2px">% 는 행 합계 기준</div></div>';
-
-  h+='<div><div style="font-weight:600;margin-bottom:3px">색상 조합</div><select onchange="pivotSetPreset(this.value)" style="font-size:.71rem;padding:2px 6px">';
-  _PV_COLOR_PRESETS.forEach(function(p){ h+='<option value="'+p.id+'"'+(cfg.preset===p.id?' selected':'')+'>'+p.name+'</option>'; });
-  h+='</select><div style="display:flex;gap:3px;margin-top:4px">';
-  ['header','sub','grand'].forEach(function(k){ h+='<span title="'+k+'" style="width:26px;height:13px;border:1px solid #ccc;border-radius:3px;display:inline-block;background:'+cfg.colors[k]+'"></span>'; });
-  h+='</div></div>';
-
-  [[1,'품목'],[33,'PP'],[0,'채널']].forEach(function(pf){
-    var vals=_pvDistinct(pf[0]); var cur=(cfg.filters[pf[0]]||'');
-    h+='<div><div style="font-weight:600;margin-bottom:3px">'+pf[1]+' 필터</div><select onchange="pivotFilterChange('+pf[0]+',this.value)" style="min-width:106px;font-size:.7rem;padding:2px 5px"><option value="">(전체)</option>';
-    vals.forEach(function(v){ h+='<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(v)+'</option>'; });
-    h+='</select></div>';
+/* ── 값 셀 계산 ── */
+function _pvCellText(v,rowsArr){
+  var d=_pvValDef(v.type), cfg=_pivotCfgInit();
+  var col=(v.type==='custom')?(cfg.customVal.col):d.src;
+  var seen={},out=[];
+  rowsArr.forEach(function(r){
+    var s;
+    if(d.combo)s='['+String(r[1]==null?'':r[1])+']'+String(r[53]==null?'':r[53]);
+    else s=String(r[col]==null?'':r[col]);
+    if(d.date)s=_pvDateText(s);
+    s=s.trim(); if(s!==''&&!seen[s]){seen[s]=1;out.push(s);}
   });
-  h+='<div style="align-self:flex-end"><button onclick="_pivotCfgInit().filters={};renderSummaryTab()" class="pv-tbtn" style="font-size:.66rem">필터 해제</button></div>';
-  h+='</div>';
-
-  h+=_pivotTemplateBar();
-  h+='<div style="margin-top:10px;overflow:auto">'+_pivotTableHTML()+'</div></div>';
-  return h;
+  if(!out.length)return '';
+  return out.length<=3?out.join(', '):(out.slice(0,3).join(', ')+' 외 '+(out.length-3));
 }
-function _pvNum(r,i){ return parseFloat(String(r[i]==null?'':r[i]).replace(/[^0-9.\-]/g,''))||0; }
+function _pvDateText(s){
+  if(!s)return '';
+  var m=/^(\d{4})[-.\/]?(\d{1,2})[-.\/]?(\d{1,2})/.exec(String(s));
+  if(m)return m[1]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[3]).slice(-2);
+  var d=/^(\d{1,2})[-.\/](\d{1,2})$/.exec(String(s));
+  if(d)return ('0'+d[1]).slice(-2)+'/'+('0'+d[2]).slice(-2);
+  return String(s);
+}
+function _pvIsNumericVal(v){ var d=_pvValDef(v.type); if(v.type==='custom')return (_pivotCfgInit().customVal.agg==='sum'); return d.agg==='sum'; }
+function _pvValIsPct(v){ return !!_pvValDef(v.type).pct; }
+function _pvValSrc(v){ var d=_pvValDef(v.type); return (v.type==='custom')?_pivotCfgInit().customVal.col:d.src; }
+
 function _pivotModel(){
   var cfg=_pivotCfgInit();
   var rows=(typeof filterLiveRowsByPV==='function')?filterLiveRowsByPV((_liveRows||[]).slice(1)):((_liveRows||[]).slice(1));
@@ -2877,82 +2760,421 @@ function _pivotModel(){
   var rmap={},rorder=[];
   rows.forEach(function(r){ var k=cfg.rows.map(function(i){return String(r[i]==null?'':r[i]);}); var kk=k.join(''); if(!(kk in rmap)){rmap[kk]={k:k,rows:[]};rorder.push(kk);} rmap[kk].rows.push(r); });
   rorder.sort(function(a,b){ var ca=rmap[a].k,cb=rmap[b].k; for(var i=0;i<ca.length;i++){ if(ca[i]!==cb[i]){ var f=cfg.rows[i]; return (typeof _pvCmpVal==='function')?_pvCmpVal(f,ca[i],cb[i]):String(ca[i]).localeCompare(cb[i],'ko'); } } return 0; });
-  var tokens=cfg.cols.slice();
-  function tokSpecs(tok){ if(tok==='dow'||tok==='week'){ return _PV_GROUPS[tok].subs.map(function(s){return {label:s[1],src:s[0]};}); } var f=+tok; return _pvDistinctRows(rows,f).map(function(v){return {label:v,f:f,val:v,src:cfg.val};}); }
-  function buildBlock(toks){ var lists=toks.map(tokSpecs); var combos=[[]]; lists.forEach(function(sp){ var nc=[]; combos.forEach(function(cmb){ sp.forEach(function(s){ nc.push(cmb.concat([s])); }); }); combos=nc; }); var leaves=combos.map(function(cmb){ var src=cfg.val,preds=[]; cmb.forEach(function(s){ if(s.f!=null)preds.push({f:s.f,val:s.val}); else src=s.src; }); return {label:cmb.map(function(s){return s.label;}).join(' ▸ '),src:src,preds:preds}; }); return {title:toks.map(_pvTokLabel).join(' ▸ '),leaves:leaves}; }
+
+  var vals=cfg.vals.slice(); if(!vals.length)vals=[{uid:'v1',type:'cnt'}];
+  function tokSpecs(tok){ var f=+tok; return _pvDistinctRows(rows,f).map(function(v){return {label:v,f:f,val:v};}); }
+  /* 한 블록 = 열 필드 조합(카티전) × 값들 (값은 항상 최하위) */
+  function buildBlock(toks){
+    var lists=toks.map(tokSpecs), combos=[[]];
+    lists.forEach(function(sp){ var nc=[]; combos.forEach(function(cmb){ sp.forEach(function(s){ nc.push(cmb.concat([s])); }); }); combos=nc; });
+    var leaves=[];
+    combos.forEach(function(cmb){
+      var preds=cmb.map(function(s){return {f:s.f,val:s.val};});
+      var base=cmb.map(function(s){return s.label;}).join(' ▸ ');
+      vals.forEach(function(v){
+        leaves.push({label:(base?base+' ▸ ':'')+_pvValLabel(v),colLabel:base,valLabel:_pvValLabel(v),
+                     preds:preds,v:v,num:_pvIsNumericVal(v),pct:_pvValIsPct(v),src:_pvValSrc(v)});
+      });
+    });
+    return {title:toks.map(_pvTokLabel).join(' ▸ '),toks:toks,leaves:leaves};
+  }
   var blocks=[];
-  if(!tokens.length){ blocks.push({title:_PV_VALS[cfg.val],leaves:[{label:'값',src:cfg.val,preds:[]}]}); }
-  else { var grp=[]; tokens.forEach(function(tok,idx){ var j=cfg.colJoin?cfg.colJoin[tok]:null; if(idx===0||j!=='flat'){ grp.push(tok); } else { blocks.push(buildBlock(grp)); grp=[tok]; } }); if(grp.length)blocks.push(buildBlock(grp)); }
-  blocks.forEach(function(b){ b.cells={}; b.rowTot={}; b.colTot=b.leaves.map(function(){return 0;}); b.grand=0; b.align=b.leaves.some(function(lf){return lf.src===9;})?'right':'center'; });
-  rorder.forEach(function(rk){ var grp=rmap[rk].rows; blocks.forEach(function(b){ var arr=b.leaves.map(function(){return 0;}),tot=0; grp.forEach(function(r){ b.leaves.forEach(function(lf,li){ var ok=true; for(var p=0;p<lf.preds.length;p++){ if(String(r[lf.preds[p].f]==null?'':r[lf.preds[p].f])!==lf.preds[p].val){ok=false;break;} } if(ok)arr[li]+=_pvNum(r,lf.src); }); }); b.leaves.forEach(function(lf,li){ tot+=arr[li]; b.colTot[li]+=arr[li]; }); b.cells[rk]=arr; b.rowTot[rk]=tot; b.grand+=tot; }); });
-  return {cfg:cfg,rmap:rmap,rorder:rorder,blocks:blocks};
+  if(!cfg.cols.length){
+    var lv=vals.map(function(v){ return {label:_pvValLabel(v),colLabel:'',valLabel:_pvValLabel(v),preds:[],v:v,num:_pvIsNumericVal(v),pct:_pvValIsPct(v),src:_pvValSrc(v)}; });
+    blocks.push({title:'값',toks:[],leaves:lv});
+  } else {
+    var grp=[];
+    cfg.cols.forEach(function(tok,idx){
+      var j=cfg.colJoin[tok];
+      if(idx===0||j!=='beside'){ grp.push(tok); } else { blocks.push(buildBlock(grp)); grp=[tok]; }
+    });
+    if(grp.length)blocks.push(buildBlock(grp));
+  }
+  blocks.forEach(function(b){
+    b.cells={}; b.rowTot={}; b.rowTotByType={}; b.colTot=b.leaves.map(function(){return 0;}); b.grand=0; b.grandByType={};
+    var types={}; b.leaves.forEach(function(lf){ if(lf.num)types[lf.v.type+(lf.v.uid||'')]=1; });
+    var numTypes={}; b.leaves.forEach(function(lf){ if(lf.num)numTypes[lf.v.type]=1; });
+    b.showTotal=(Object.keys(numTypes).length===1);   /* 값 종류가 하나뿐일 때만 합계 열 */
+    b.align=b.leaves.every(function(lf){return lf.num;})?'right':'center';
+  });
+  rorder.forEach(function(rk){
+    var grpRows=rmap[rk].rows;
+    blocks.forEach(function(b){
+      var arr=[],tot=0,byType={};
+      b.leaves.forEach(function(lf,li){
+        var sel=grpRows.filter(function(r){
+          for(var p=0;p<lf.preds.length;p++){ if(String(r[lf.preds[p].f]==null?'':r[lf.preds[p].f])!==lf.preds[p].val)return false; }
+          return true;
+        });
+        if(lf.num){ var sum=0; sel.forEach(function(r){ sum+=_pvNum(r,lf.src); }); arr.push(sum);
+          b.colTot[li]+=sum; tot+=sum; byType[lf.v.type]=(byType[lf.v.type]||0)+sum;
+          b.grandByType[lf.v.type]=(b.grandByType[lf.v.type]||0)+sum;
+        } else { arr.push(_pvCellText(lf.v,sel)); }
+      });
+      b.cells[rk]=arr; b.rowTot[rk]=tot; b.rowTotByType[rk]=byType; b.grand+=tot;
+    });
+  });
+  return {cfg:cfg,rmap:rmap,rorder:rorder,blocks:blocks,vals:vals};
 }
-function _pvFmt(v,rowBase,colBase,pct){ if(pct==='row')return rowBase>0?(Math.round(v/rowBase*1000)/10)+'%':'0%'; if(pct==='col')return colBase>0?(Math.round(v/colBase*1000)/10)+'%':'0%'; return (Math.round(v*100)/100).toLocaleString(); }
+function _pvFmtCell(lf,v,rowBase){
+  if(!lf.num)return esc(String(v==null?'':v));
+  if(lf.pct)return rowBase>0?(Math.round(v/rowBase*1000)/10)+'%':'';
+  return v?Number(v).toLocaleString():'';
+}
 function _pivotTableHTML(){
   var cfg=_pivotCfgInit();
-  if(!cfg.rows.length)return '<div style="color:#999;font-size:.72rem">행 필드를 1개 이상 선택하세요.</div>';
-  var M=_pivotModel(), blocks=M.blocks, rorder=M.rorder, rmap=M.rmap, nf=cfg.rows.length, pct=cfg.pct;
-  var CH=cfg.colors.header,CS=cfg.colors.sub,CG=cfg.colors.grand, TH=_pvTextColor(CH),TS=_pvTextColor(CS),TG=_pvTextColor(CG),bd='#c9c9cf';
-  var valLabel=_PV_VALS[cfg.val]||'값';
-  var cap='<div style="text-align:right;font-size:.7rem;color:#555;margin-bottom:3px">값: <b>'+esc(valLabel)+'</b>'+(pct!=='none'?' · '+(pct==='row'?'행 기준 %':'열 기준 %'):'')+'</div>';
-  var hstyle='border:1px solid '+bd+';background:'+CH+';color:'+TH+';padding:3px 9px;text-align:center;font-weight:600';
-  var t='<table style="border-collapse:collapse;font-size:.72rem;white-space:nowrap"><thead><tr>';
-  cfg.rows.forEach(function(i){ t+='<th rowspan="2" style="'+hstyle+';position:sticky;top:0">'+esc(OUT_COLS[i])+'</th>'; });
-  blocks.forEach(function(b){ t+='<th colspan="'+(b.leaves.length+1)+'" style="'+hstyle+'">'+esc(b.title)+'</th>'; });
-  t+='</tr><tr>';
-  blocks.forEach(function(b){ b.leaves.forEach(function(lf){ t+='<th style="'+hstyle+'">'+esc(lf.label)+'</th>'; }); t+='<th style="'+hstyle+'">합계</th>'; });
-  t+='</tr></thead><tbody>';
-  var subPos=(cfg.subFields||[]).map(function(f){return cfg.rows.indexOf(f);}).filter(function(p){return p>=0;});
-  subPos=subPos.filter(function(v,i){return subPos.indexOf(v)===i;}).sort(function(a,b){return a-b;});
-  var inner=subPos.length?subPos[subPos.length-1]:-1;
-  function segKey(k){ return inner>=0?k.slice(0,inner+1).join(''):'__all__'; }
-  var segments=[],cur=null,curKey=null;
-  rorder.forEach(function(rk){ var sk=segKey(rmap[rk].k); if(sk!==curKey){ cur=[]; segments.push(cur); curKey=sk; } cur.push(rk); });
-  function align(a){ return 'text-align:'+a; }
-  function subtotalRow(pos,rkeys){ var lbl=rmap[rkeys[0]].k[pos]; var s='<tr style="background:'+CS+';color:'+TS+';font-weight:600"><td colspan="'+nf+'" style="border:1px solid '+bd+';padding:2px 9px;text-align:center">▸ '+esc(lbl)+' 소계</td>'; blocks.forEach(function(b){ var sub=b.leaves.map(function(){return 0;}),stot=0; rkeys.forEach(function(rk){ b.cells[rk].forEach(function(v,li){sub[li]+=v;}); stot+=b.rowTot[rk]; }); b.leaves.forEach(function(lf,li){ s+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(sub[li],stot,b.colTot[li],pct)+'</td>'; }); s+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(stot,stot,b.grand,pct)+'</td>'; }); return s+'</tr>'; }
-  var acc={}; subPos.forEach(function(p){acc[p]=[];});
-  segments.forEach(function(seg,si){
-    var keys=seg.map(function(rk){return rmap[rk].k;});
-    var span=[]; for(var r=0;r<keys.length;r++)span.push([]);
-    for(var ci=0;ci<nf;ci++){ if(cfg.rows[ci]===4||cfg.rows[ci]===5){ for(var r=0;r<keys.length;r++)span[r][ci]=1; continue; } var r=0; while(r<keys.length){ var pref=keys[r].slice(0,ci+1).join(''); var e=r+1; while(e<keys.length&&keys[e].slice(0,ci+1).join('')===pref)e++; span[r][ci]=e-r; for(var q=r+1;q<e;q++)span[q][ci]=0; r=e; } }
-    seg.forEach(function(rk,ri){ var kk=rmap[rk].k; t+='<tr>';
-      for(var ci=0;ci<nf;ci++){ if(span[ri][ci]>0){ t+='<td'+(span[ri][ci]>1?' rowspan="'+span[ri][ci]+'"':'')+' style="border:1px solid '+bd+';padding:2px 9px;text-align:center;vertical-align:top">'+esc(kk[ci])+'</td>'; } }
-      blocks.forEach(function(b){ var arr=b.cells[rk]; b.leaves.forEach(function(lf,li){ var v=arr[li]; t+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+((v||pct==='none')?_pvFmt(v,b.rowTot[rk],b.colTot[li],pct):'')+'</td>'; }); t+='<td style="border:1px solid '+bd+';padding:2px 9px;font-weight:600;'+align(b.align)+'">'+_pvFmt(b.rowTot[rk],b.rowTot[rk],b.grand,pct)+'</td>'; });
-      t+='</tr>';
-    });
-    subPos.forEach(function(p){ seg.forEach(function(rk){acc[p].push(rk);}); });
-    var nextK=(si+1<segments.length)?rmap[segments[si+1][0]].k:null, curK=rmap[seg[0]].k;
-    subPos.slice().sort(function(a,b){return b-a;}).forEach(function(p){ var closing=!nextK||nextK.slice(0,p+1).join('')!==curK.slice(0,p+1).join(''); if(closing){ t+=subtotalRow(p,acc[p]); acc[p]=[]; } });
-  });
-  t+='<tr style="background:'+CG+';color:'+TG+';font-weight:700"><td colspan="'+nf+'" style="border:1px solid '+bd+';padding:2px 9px;text-align:center">총합계</td>';
-  blocks.forEach(function(b){ b.leaves.forEach(function(lf,li){ t+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(b.colTot[li],b.grand,b.colTot[li],pct)+'</td>'; }); t+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(b.grand,b.grand,b.grand,pct)+'</td>'; });
-  t+='</tr></tbody></table>';
-  return cap+t;
-}
-function pivotExportExcel(){
-  if(typeof XLSX==='undefined'){alert('엑셀 모듈을 불러오지 못했습니다.');return;}
-  var cfg=_pivotCfgInit(); if(!cfg.rows.length){alert('행 필드를 선택하세요.');return;}
+  if(!cfg.rows.length)return '<div style="color:#999;font-size:.72rem;padding:14px">행 필드를 1개 이상 놓아주세요.</div>';
   var M=_pivotModel(), blocks=M.blocks, rorder=M.rorder, rmap=M.rmap, nf=cfg.rows.length;
-  var aoa=[],merges=[];
-  var row0=[],row1=[]; cfg.rows.forEach(function(i){ row0.push(OUT_COLS[i]); row1.push(''); });
-  var col=nf;
-  blocks.forEach(function(b){ row0.push(b.title); for(var j=1;j<b.leaves.length+1;j++)row0.push(''); merges.push({s:{r:0,c:col},e:{r:0,c:col+b.leaves.length}}); b.leaves.forEach(function(lf){row1.push(lf.label);}); row1.push('합계'); col+=b.leaves.length+1; });
-  cfg.rows.forEach(function(i,ci){ merges.push({s:{r:0,c:ci},e:{r:1,c:ci}}); });
-  aoa.push(row0); aoa.push(row1);
+  var CH=cfg.colors.header,CS=cfg.colors.sub,CG=cfg.colors.grand,TH=_pvTextColor(CH),TS=_pvTextColor(CS),TG=_pvTextColor(CG),bd='#c9c9cf';
+  var hs='border:1px solid '+bd+';background:'+CH+';color:'+TH+';padding:3px 9px;text-align:center;font-weight:600';
+  var t='<table style="border-collapse:collapse;font-size:.72rem;white-space:nowrap"><thead><tr>';
+  cfg.rows.forEach(function(i){ t+='<th rowspan="3" style="'+hs+';position:sticky;top:0">'+esc(OUT_COLS[i])+'</th>'; });
+  blocks.forEach(function(b){ t+='<th colspan="'+(b.leaves.length+(b.showTotal?1:0))+'" style="'+hs+'">'+esc(b.title)+'</th>'; });
+  t+='</tr><tr>';
+  blocks.forEach(function(b){
+    var i=0; while(i<b.leaves.length){ var lab=b.leaves[i].colLabel,n=0; while(i+n<b.leaves.length&&b.leaves[i+n].colLabel===lab)n++;
+      t+='<th colspan="'+n+'" style="'+hs+'">'+esc(lab||'　')+'</th>'; i+=n; }
+    if(b.showTotal)t+='<th rowspan="2" style="'+hs+'">합계</th>';
+  });
+  t+='</tr><tr>';
+  blocks.forEach(function(b){ b.leaves.forEach(function(lf){ t+='<th style="'+hs+';font-weight:500">'+esc(lf.valLabel)+'</th>'; }); });
+  t+='</tr></thead><tbody>';
   var subPos=(cfg.subFields||[]).map(function(f){return cfg.rows.indexOf(f);}).filter(function(p){return p>=0;});
   subPos=subPos.filter(function(v,i){return subPos.indexOf(v)===i;}).sort(function(a,b){return a-b;});
   var inner=subPos.length?subPos[subPos.length-1]:-1;
   function segKey(k){ return inner>=0?k.slice(0,inner+1).join(''):'__all__'; }
   var segs=[],cur=null,ck=null;
   rorder.forEach(function(rk){ var sk=segKey(rmap[rk].k); if(sk!==ck){cur=[];segs.push(cur);ck=sk;} cur.push(rk); });
-  function subRow(pos,rkeys){ var lbl=rmap[rkeys[0]].k[pos]; var r=[]; for(var i=0;i<nf;i++)r.push(i===0?('▸ '+lbl+' 소계'):''); blocks.forEach(function(b){ var sub=b.leaves.map(function(){return 0;}),stot=0; rkeys.forEach(function(rk){ b.cells[rk].forEach(function(v,li){sub[li]+=v;}); stot+=b.rowTot[rk]; }); sub.forEach(function(v){r.push(v);}); r.push(stot); }); return r; }
+  function cellStyle(a){ return 'border:1px solid '+bd+';padding:2px 9px;text-align:'+a; }
+  function subtotalRow(pos,rkeys){
+    var lbl=rmap[rkeys[0]].k[pos];
+    var s='<tr style="background:'+CS+';color:'+TS+';font-weight:600"><td colspan="'+nf+'" style="'+cellStyle('center')+'">▸ '+esc(lbl)+' 소계</td>';
+    blocks.forEach(function(b){
+      var sub=b.leaves.map(function(){return 0;}),stot=0,byType={};
+      rkeys.forEach(function(rk){ b.cells[rk].forEach(function(v,li){ if(b.leaves[li].num){sub[li]+=v;} }); stot+=b.rowTot[rk];
+        var bt=b.rowTotByType[rk]; for(var k in bt)byType[k]=(byType[k]||0)+bt[k]; });
+      b.leaves.forEach(function(lf,li){ s+='<td style="'+cellStyle(lf.num?'right':'center')+'">'+(lf.num?_pvFmtCell(lf,sub[li],byType[lf.v.type]||0):'')+'</td>'; });
+      if(b.showTotal)s+='<td style="'+cellStyle('right')+'">'+(stot?stot.toLocaleString():'')+'</td>';
+    });
+    return s+'</tr>';
+  }
   var acc={}; subPos.forEach(function(p){acc[p]=[];});
-  segs.forEach(function(seg,si){ var keys=seg.map(function(rk){return rmap[rk].k;}); var span=[]; for(var _r=0;_r<keys.length;_r++)span.push([]); for(var ci=0;ci<nf;ci++){ var _r=0; while(_r<keys.length){ var pref=keys[_r].slice(0,ci+1).join('\u0001'); var _e=_r+1; while(_e<keys.length&&keys[_e].slice(0,ci+1).join('\u0001')===pref)_e++; span[_r][ci]=_e-_r; for(var _q=_r+1;_q<_e;_q++)span[_q][ci]=0; _r=_e; } } var baseRow=aoa.length; seg.forEach(function(rk,ri){ var kk=rmap[rk].k; var r=[]; for(var ci=0;ci<nf;ci++){ if(span[ri][ci]>0){ r.push(kk[ci]); if(span[ri][ci]>1)merges.push({s:{r:baseRow+ri,c:ci},e:{r:baseRow+ri+span[ri][ci]-1,c:ci}}); } else { r.push(''); } } blocks.forEach(function(b){ b.cells[rk].forEach(function(v){r.push(v);}); r.push(b.rowTot[rk]); }); aoa.push(r); }); subPos.forEach(function(p){seg.forEach(function(rk){acc[p].push(rk);});}); var nextK=(si+1<segs.length)?rmap[segs[si+1][0]].k:null, curK=rmap[seg[0]].k; subPos.slice().sort(function(a,b){return b-a;}).forEach(function(p){ var closing=!nextK||nextK.slice(0,p+1).join('')!==curK.slice(0,p+1).join(''); if(closing){ aoa.push(subRow(p,acc[p])); acc[p]=[]; } }); });
-  var gr=[]; for(var i=0;i<nf;i++)gr.push(i===0?'총합계':''); blocks.forEach(function(b){ b.colTot.forEach(function(v){gr.push(v);}); gr.push(b.grand); }); aoa.push(gr);
-  var _mx=0; aoa.forEach(function(r){ if(r&&r.length>_mx)_mx=r.length; });
-  var _cols=[]; for(var _i=0;_i<_mx;_i++)_cols.push(_i<nf?18:13);
-  exportAOAStyled(aoa,merges,{cols:_cols,headerRows:2,name:'피벗',
-    file:'피벗요약_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx'});
+  segs.forEach(function(seg,si){
+    var keys=seg.map(function(rk){return rmap[rk].k;});
+    var span=[]; for(var r=0;r<keys.length;r++)span.push([]);
+    for(var ci=0;ci<nf;ci++){
+      if(_PV_NOMERGE_ROWS.indexOf(cfg.rows[ci])>=0){ for(var r2=0;r2<keys.length;r2++)span[r2][ci]=1; continue; }
+      var r3=0; while(r3<keys.length){ var pref=keys[r3].slice(0,ci+1).join(''); var e=r3+1;
+        while(e<keys.length&&keys[e].slice(0,ci+1).join('')===pref)e++;
+        span[r3][ci]=e-r3; for(var q=r3+1;q<e;q++)span[q][ci]=0; r3=e; }
+    }
+    seg.forEach(function(rk,ri){
+      var kk=rmap[rk].k; t+='<tr>';
+      for(var ci=0;ci<nf;ci++){ if(span[ri][ci]>0) t+='<td'+(span[ri][ci]>1?' rowspan="'+span[ri][ci]+'"':'')+' style="'+cellStyle('center')+';vertical-align:top">'+esc(kk[ci])+'</td>'; }
+      blocks.forEach(function(b){
+        var arr=b.cells[rk],bt=b.rowTotByType[rk]||{};
+        b.leaves.forEach(function(lf,li){ t+='<td style="'+cellStyle(lf.num?'right':'center')+'">'+_pvFmtCell(lf,arr[li],bt[lf.v.type]||0)+'</td>'; });
+        if(b.showTotal)t+='<td style="'+cellStyle('right')+';font-weight:600">'+(b.rowTot[rk]?b.rowTot[rk].toLocaleString():'')+'</td>';
+      });
+      t+='</tr>';
+    });
+    subPos.forEach(function(p){ seg.forEach(function(rk){acc[p].push(rk);}); });
+    var nextK=(si+1<segs.length)?rmap[segs[si+1][0]].k:null,curK=rmap[seg[0]].k;
+    subPos.slice().sort(function(a,b){return b-a;}).forEach(function(p){
+      var closing=!nextK||nextK.slice(0,p+1).join('')!==curK.slice(0,p+1).join('');
+      if(closing){ t+=subtotalRow(p,acc[p]); acc[p]=[]; }
+    });
+  });
+  t+='<tr style="background:'+CG+';color:'+TG+';font-weight:700"><td colspan="'+nf+'" style="'+cellStyle('center')+'">총합계</td>';
+  blocks.forEach(function(b){
+    b.leaves.forEach(function(lf,li){ t+='<td style="'+cellStyle(lf.num?'right':'center')+'">'+(lf.num?_pvFmtCell(lf,b.colTot[li],b.grandByType[lf.v.type]||0):'')+'</td>'; });
+    if(b.showTotal)t+='<td style="'+cellStyle('right')+'">'+(b.grand?b.grand.toLocaleString():'')+'</td>';
+  });
+  t+='</tr></tbody></table>';
+  return t;
+}
+
+/* ── 드래그 토큰 ── */
+function _pvTokKey(t){ return 'n:'+t; }
+function _pvTokParse(k){ return +String(k).slice(2); }
+function pivotPoolDragStart(e,kind,payload){ window._pvDrag={from:'pool',kind:kind,payload:payload}; if(e.dataTransfer){e.dataTransfer.effectAllowed='copyMove';try{e.dataTransfer.setData('text/plain',String(payload));}catch(_e){}} }
+function pivotZoneDragStart(e,zone,payload){ window._pvDrag={from:zone,kind:(zone==='val'?'val':'field'),payload:payload}; if(e.dataTransfer){e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',String(payload));}catch(_e){}} }
+function pivotZoneOver(e,el){ if(e.preventDefault)e.preventDefault(); if(el)el.style.background='#eaf3fd'; }
+function pivotZoneLeave(e,el){ if(el)el.style.background=''; }
+
+function pivotZoneDrop(e,zone){
+  if(e.preventDefault)e.preventDefault(); if(e.stopPropagation)e.stopPropagation();
+  var box=document.getElementById('pvZone-'+zone); if(box)box.style.background='';
+  var d=window._pvDrag; window._pvDrag=null; if(!d)return;
+  var c=_pivotCfgInit();
+  if(d.kind==='val'){
+    if(zone!=='col'){ alert('값은 [열 & 값 설정]에만 놓을 수 있습니다.'); return; }
+    if(d.from==='col'){ var i=_pvFindVal(d.payload); if(i>=0){ var mv=c.vals.splice(i,1)[0]; c.vals.push(mv); } }
+    else c.vals.push({uid:'v'+Date.now()+Math.floor(Math.random()*1000),type:d.payload});
+    renderSummaryTab(); return;
+  }
+  var tok=+d.payload;
+  var allowed=(zone==='row')?_pivotRowFlds():_pivotColItems();
+  if(allowed.indexOf(tok)<0){ alert('이 필드는 '+(zone==='row'?'행':'열')+'에 사용할 수 없습니다.'); return; }
+  if(d.from==='row')c.rows=c.rows.filter(function(x){return x!==tok;});
+  if(d.from==='col')c.cols=c.cols.filter(function(x){return x!==tok;});
+  var arr=(zone==='row')?c.rows:c.cols;
+  if(arr.indexOf(tok)<0)arr.push(tok);
+  if(zone==='col'&&!c.colJoin[tok])c.colJoin[tok]='below';
+  c.subFields=(c.subFields||[]).filter(function(i){return c.rows.indexOf(i)>=0;});
+  renderSummaryTab();
+}
+function _pvFindVal(uid){ var v=_pivotCfgInit().vals; for(var i=0;i<v.length;i++)if(v[i].uid===uid)return i; return -1; }
+/* 칩 위 드롭 = 그 자리 앞에 삽입 */
+function pivotChipOver(e,el){ if(e.preventDefault)e.preventDefault(); if(e.stopPropagation)e.stopPropagation(); el.style.boxShadow='inset 4px 0 0 #0068b5'; }
+function pivotChipLeave(e,el){ el.style.boxShadow=''; }
+function pivotChipDrop(e,el,zone,targetPayload,targetKind){
+  if(e.preventDefault)e.preventDefault(); if(e.stopPropagation)e.stopPropagation();
+  el.style.boxShadow='';
+  var d=window._pvDrag; window._pvDrag=null; if(!d)return;
+  var c=_pivotCfgInit();
+  if(d.kind==='val'){
+    if(targetKind!=='val'){ pivotZoneDrop(e,zone); return; }
+    var from=(d.from==='col')?_pvFindVal(d.payload):-1;
+    var item=(from>=0)?c.vals.splice(from,1)[0]:{uid:'v'+Date.now()+Math.floor(Math.random()*1000),type:d.payload};
+    var ti=_pvFindVal(targetPayload); if(ti<0)ti=c.vals.length;
+    c.vals.splice(ti,0,item); renderSummaryTab(); return;
+  }
+  if(targetKind==='val'){ pivotZoneDrop(e,zone); return; }   /* 값 위에 필드를 놓으면 그냥 필드 목록 뒤로 */
+  var tok=+d.payload, target=+targetPayload; if(tok===target)return;
+  var allowed=(zone==='row')?_pivotRowFlds():_pivotColItems();
+  if(allowed.indexOf(tok)<0){ alert('이 필드는 '+(zone==='row'?'행':'열')+'에 사용할 수 없습니다.'); return; }
+  if(d.from==='row')c.rows=c.rows.filter(function(x){return x!==tok;});
+  if(d.from==='col')c.cols=c.cols.filter(function(x){return x!==tok;});
+  var arr=((zone==='row')?c.rows:c.cols).filter(function(x){return x!==tok;});
+  var ti2=arr.indexOf(target); if(ti2<0)ti2=arr.length;
+  arr.splice(ti2,0,tok);
+  if(zone==='row')c.rows=arr; else { c.cols=arr; if(!c.colJoin[tok])c.colJoin[tok]='below'; }
+  c.subFields=(c.subFields||[]).filter(function(i){return c.rows.indexOf(i)>=0;});
+  renderSummaryTab();
+}
+function pivotRemoveField(zone,tok){ var c=_pivotCfgInit(); tok=+tok;
+  if(zone==='row')c.rows=c.rows.filter(function(x){return x!==tok;}); else c.cols=c.cols.filter(function(x){return x!==tok;});
+  c.subFields=(c.subFields||[]).filter(function(i){return c.rows.indexOf(i)>=0;}); renderSummaryTab(); }
+function pivotRemoveVal(uid){ var c=_pivotCfgInit(); c.vals=c.vals.filter(function(v){return v.uid!==uid;}); renderSummaryTab(); }
+function pivotClearZone(zone){ var c=_pivotCfgInit(); if(zone==='row'){c.rows=[];c.subFields=[];} else {c.cols=[];c.vals=[{uid:'v1',type:'cnt'}];} renderSummaryTab(); }
+function pivotSetJoin(tok,v){ _pivotCfgInit().colJoin[+tok]=v; renderSummaryTab(); }
+function pivotToggleSub(i,on){ var c=_pivotCfgInit(); i=+i; var p=c.subFields.indexOf(i); if(on){if(p<0)c.subFields.push(i);}else{if(p>=0)c.subFields.splice(p,1);} renderSummaryTab(); }
+function pivotSetCustom(k,v){ var c=_pivotCfgInit(); c.customVal[k]=(k==='col')?+v:v; renderSummaryTab(); }
+
+/* ── 필터 팝업 ── */
+function openPivotFilter(){
+  var ex=document.getElementById('pvFilterPop'); if(ex){ex.remove();return;}
+  var pop=document.createElement('div'); pop.id='pvFilterPop';
+  pop.style.cssText='position:fixed;top:120px;right:26px;z-index:10002;background:#fff;border:1px solid #c8c8c8;border-radius:10px;box-shadow:0 10px 34px rgba(0,0,0,.24);padding:14px;width:290px;font-size:.75rem;color:#222';
+  document.body.appendChild(pop); _pvRenderFilterPop();
+}
+function _pvRenderFilterPop(){
+  var pop=document.getElementById('pvFilterPop'); if(!pop)return;
+  var cfg=_pivotCfgInit();
+  var h='<div style="font-weight:800;margin-bottom:9px">필터 <span style="float:right;cursor:pointer;color:#aaa;font-weight:400" onclick="document.getElementById(\'pvFilterPop\').remove()">✕</span></div>';
+  [[1,'품목'],[33,'PP'],[0,'채널']].forEach(function(pf){
+    var vals=_pvDistinct(pf[0]),cur=(cfg.filters[pf[0]]||'');
+    h+='<div style="margin-bottom:8px"><div style="font-weight:600;margin-bottom:3px;font-size:.7rem">'+pf[1]+'</div>'
+      +'<select onchange="pivotFilterChange('+pf[0]+',this.value)" style="width:100%;font-size:.71rem;padding:4px 6px;border:1px solid #ccc;border-radius:5px"><option value="">(전체)</option>';
+    vals.forEach(function(v){ h+='<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(v)+'</option>'; });
+    h+='</select></div>';
+  });
+  h+='<button onclick="_pivotCfgInit().filters={};renderSummaryTab();_pvRenderFilterPop()" class="pv-tbtn" style="width:100%;margin-top:4px">필터 모두 해제</button>';
+  pop.innerHTML=h;
+}
+function _pvFilterCount(){ var f=_pivotCfgInit().filters||{},n=0; for(var k in f)if(f[k])n++; return n; }
+
+/* ── 템플릿 ── */
+function pivotSaveTemplate(){ var el=document.getElementById('pvTplName'); var nm=((el&&el.value)||'').trim(); if(!nm){alert('템플릿 이름을 입력하세요.');return;} if(!window._pivotTemplates)window._pivotTemplates=[]; var cfg=JSON.parse(JSON.stringify(_pivotCfgInit())); var ex=window._pivotTemplates.filter(function(t){return t.name===nm;})[0]; if(ex){ if(!confirm('같은 이름의 템플릿을 덮어쓸까요?'))return; ex.cfg=cfg; } else { window._pivotTemplates.push({name:nm,cfg:cfg}); } if(typeof saveRulesToFile==='function'){try{saveRulesToFile(true);}catch(e){}} window._pvTplSelected=nm; renderSummaryTab(); }
+function pivotLoadTemplate(){ var sel=document.getElementById('pvTplSel'); if(!sel||!sel.value)return; window._pvTplSelected=sel.value; var t=(window._pivotTemplates||[]).filter(function(x){return x.name===sel.value;})[0]; if(!t)return; window._pivotCfg=JSON.parse(JSON.stringify(t.cfg)); _pivotCfgInit(); renderSummaryTab(); }
+function pivotDeleteTemplate(){ var sel=document.getElementById('pvTplSel'); if(!sel||!sel.value)return; if(!confirm('템플릿 "'+sel.value+'"를 삭제할까요?'))return; window._pivotTemplates=(window._pivotTemplates||[]).filter(function(x){return x.name!==sel.value;}); window._pvTplSelected=''; if(typeof saveRulesToFile==='function'){try{saveRulesToFile(true);}catch(e){}} renderSummaryTab(); }
+
+/* ── 빌더 UI ── */
+function renderPivotBuilder(){
+  var cfg=_pivotCfgInit();
+  var CHIP_F='background:#eef2fa;border:1px solid #c3ccdd';           /* 필드 칩 */
+  var CHIP_V='background:#fdf1e3;border:1px solid #e5c69a';           /* 값 칩(색 구분) */
+  function poolChip(label,kind,payload,used,tip){
+    return '<span draggable="true" ondragstart="pivotPoolDragStart(event,\''+kind+'\',\''+payload+'\')" title="'+esc(tip||'')+'"'
+      +' style="padding:3px 10px;border-radius:12px;font-size:.69rem;cursor:grab;'
+      +(kind==='val'?CHIP_V:CHIP_F)+';'+(used?'opacity:.45;':'')+'">⠿ '+esc(label)+'</span>';
+  }
+  /* 사용 가능한 필드: 행 / 열 / 값 영역 분리 */
+  function pools(){
+    var usedR={},usedC={}; cfg.rows.forEach(function(t){usedR[t]=1;}); cfg.cols.forEach(function(t){usedC[t]=1;});
+    var h='<div style="display:flex;gap:10px;flex-wrap:wrap">';
+    h+='<div style="flex:1 1 250px;min-width:220px"><div style="font-size:.68rem;font-weight:700;color:#555;margin-bottom:3px">행에 쓸 수 있는 필드</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:4px;max-height:96px;overflow:auto;border:1px solid #e0e0e6;border-radius:6px;padding:6px;background:#fff">';
+    _pivotRowFlds().forEach(function(t){ h+=poolChip(OUT_COLS[t],'field',t,usedR[t],'행 설정으로 끌어다 놓으세요'); });
+    h+='</div></div>';
+    h+='<div style="flex:1 1 250px;min-width:220px"><div style="font-size:.68rem;font-weight:700;color:#555;margin-bottom:3px">열에 쓸 수 있는 필드</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:4px;max-height:96px;overflow:auto;border:1px solid #e0e0e6;border-radius:6px;padding:6px;background:#fff">';
+    _pivotColItems().forEach(function(t){ h+=poolChip(OUT_COLS[t],'field',t,usedC[t],'열 & 값 설정으로 끌어다 놓으세요'); });
+    h+='</div></div>';
+    h+='<div style="flex:1 1 250px;min-width:220px"><div style="font-size:.68rem;font-weight:700;color:#8a5a1e;margin-bottom:3px">값 (중복 사용 가능)</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:4px;max-height:96px;overflow:auto;border:1px solid #ecd9bf;border-radius:6px;padding:6px;background:#fffdf9">';
+    _PV_VALDEFS.forEach(function(d){ h+=poolChip(d.label,'val',d.type,false,'열 & 값 설정 맨 아래에 붙습니다 · 같은 값을 여러 번 넣을 수 있습니다'); });
+    h+='</div></div>';
+    return h+'</div>';
+  }
+  /* 행 설정: 가로 나열 */
+  function rowZone(){
+    var h='<div id="pvZone-row" ondragover="pivotZoneOver(event,this)" ondragleave="pivotZoneLeave(event,this)" ondrop="pivotZoneDrop(event,\'row\')"'
+      +' style="min-height:46px;border:2px dashed #b9c2d0;border-radius:8px;padding:7px;background:#fff;display:flex;flex-wrap:wrap;gap:6px;align-items:center">';
+    if(!cfg.rows.length)h+='<span style="color:#aaa;font-size:.68rem">필드를 끌어다 놓으세요 (왼쪽 → 오른쪽 = 바깥 → 안쪽 그룹)</span>';
+    cfg.rows.forEach(function(t,i){
+      h+='<div draggable="true" ondragstart="pivotZoneDragStart(event,\'row\',\''+t+'\')" ondragover="pivotChipOver(event,this)" ondragleave="pivotChipLeave(event,this)" ondrop="pivotChipDrop(event,this,\'row\',\''+t+'\',\'field\')"'
+        +' style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;'+CHIP_F+';border-radius:7px;cursor:grab;font-size:.71rem;white-space:nowrap">'
+        +'<span style="color:#98a;font-size:.62rem">'+(i+1)+'</span><span>'+esc(OUT_COLS[t])+'</span>'
+        +'<label style="font-size:.62rem;color:#666;cursor:pointer" title="이 필드마다 소계 행을 넣습니다"><input type="checkbox" onchange="pivotToggleSub('+t+',this.checked)"'+(cfg.subFields.indexOf(t)>=0?' checked':'')+' style="vertical-align:middle;margin:0 2px 0 0">소계</label>'
+        +'<span onclick="pivotRemoveField(\'row\','+t+')" title="제거" style="cursor:pointer;color:#c66;font-weight:700">✕</span></div>';
+    });
+    return h+'</div>';
+  }
+  /* 열 & 값 설정: 필드(옆으로/아래로 선택) + 맨 아래 값 칩 */
+  function colZone(){
+    var h='<div id="pvZone-col" ondragover="pivotZoneOver(event,this)" ondragleave="pivotZoneLeave(event,this)" ondrop="pivotZoneDrop(event,\'col\')"'
+      +' style="min-height:46px;border:2px dashed #b9c2d0;border-radius:8px;padding:7px;background:#fff">';
+    if(!cfg.cols.length&&!cfg.vals.length)h+='<span style="color:#aaa;font-size:.68rem">필드와 값을 끌어다 놓으세요</span>';
+    if(cfg.cols.length){
+      h+='<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px">';
+      cfg.cols.forEach(function(t,i){
+        var j=cfg.colJoin[t]||'below';
+        h+='<div draggable="true" ondragstart="pivotZoneDragStart(event,\'col\',\''+t+'\')" ondragover="pivotChipOver(event,this)" ondragleave="pivotChipLeave(event,this)" ondrop="pivotChipDrop(event,this,\'col\',\''+t+'\',\'field\')"'
+          +' style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;'+CHIP_F+';border-radius:7px;cursor:grab;font-size:.71rem;white-space:nowrap">'
+          +'<span>'+esc(OUT_COLS[t])+'</span>'
+          +(i===0?'<span style="font-size:.62rem;color:#aaa">기준</span>'
+                 :'<select onchange="pivotSetJoin('+t+',this.value)" title="앞 필드와의 배치" style="font-size:.62rem;border:1px solid #ccd;border-radius:4px;padding:0 2px">'
+                  +'<option value="below"'+(j==='below'?' selected':'')+'>아래로</option>'
+                  +'<option value="beside"'+(j==='beside'?' selected':'')+'>옆으로</option></select>')
+          +'<span onclick="pivotRemoveField(\'col\','+t+')" title="제거" style="cursor:pointer;color:#c66;font-weight:700">✕</span></div>';
+      });
+      h+='</div>';
+    }
+    h+='<div style="border-top:1px dashed #e2d6c4;padding-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
+      +'<span style="font-size:.64rem;color:#8a5a1e;font-weight:700">값 (항상 최하위)</span>';
+    if(!cfg.vals.length)h+='<span style="color:#c99;font-size:.66rem">값을 최소 1개 놓아주세요</span>';
+    cfg.vals.forEach(function(v){
+      h+='<div draggable="true" ondragstart="pivotZoneDragStart(event,\'val\',\''+v.uid+'\')" ondragover="pivotChipOver(event,this)" ondragleave="pivotChipLeave(event,this)" ondrop="pivotChipDrop(event,this,\'col\',\''+v.uid+'\',\'val\')"'
+        +' style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;'+CHIP_V+';border-radius:7px;cursor:grab;font-size:.71rem;white-space:nowrap">'
+        +'<span>'+esc(_pvValLabel(v))+'</span>'
+        +'<span onclick="pivotRemoveVal(\''+v.uid+'\')" title="제거" style="cursor:pointer;color:#c66;font-weight:700">✕</span></div>';
+    });
+    h+='</div>';
+    if(cfg.vals.some(function(v){return v.type==='custom';})){
+      h+='<div style="margin-top:7px;padding-top:6px;border-top:1px dashed #eee;display:flex;gap:6px;align-items:center;font-size:.66rem;flex-wrap:wrap">'
+        +'<b style="color:#8a5a1e">커스텀 값</b>'
+        +'<select onchange="pivotSetCustom(\'col\',this.value)" style="font-size:.66rem">';
+      _pivotFlds().forEach(function(i){ h+='<option value="'+i+'"'+(cfg.customVal.col===i?' selected':'')+'>'+esc(OUT_COLS[i])+'</option>'; });
+      h+='</select><select onchange="pivotSetCustom(\'agg\',this.value)" style="font-size:.66rem">'
+        +'<option value="sum"'+(cfg.customVal.agg==='sum'?' selected':'')+'>합계(숫자)</option>'
+        +'<option value="text"'+(cfg.customVal.agg==='text'?' selected':'')+'>값 표시(문자)</option></select>'
+        +'<input value="'+esc(cfg.customVal.label||'')+'" placeholder="표시 이름(선택)" oninput="pivotSetCustom(\'label\',this.value)" style="font-size:.66rem;padding:2px 5px;width:110px"></div>';
+    }
+    return h+'</div>';
+  }
+
+  var list=window._pivotTemplates||[], curTpl=window._pvTplSelected||'', fc=_pvFilterCount();
+  var h='<div style="border:1px solid #d8d8de;border-radius:8px;padding:11px 13px;margin-bottom:12px;background:#fafafd">';
+  /* 헤더 줄: 우측에 필터 · 템플릿 · 엑셀 */
+  h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px">';
+  h+='<div style="font-weight:700;font-size:.82rem">🧮 피벗 요약 <span style="font-weight:400;color:#888;font-size:.7rem">· 현재 큐시트 필터 기준</span></div>';
+  h+='<div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+  h+='<button onclick="openPivotFilter()" class="pv-tbtn" title="품목·PP·채널 필터">필터'+(fc?' <b style="color:#c0392b">('+fc+')</b>':'')+'</button>';
+  h+='<span style="width:1px;height:16px;background:#ddd"></span>';
+  h+='<input id="pvTplName" placeholder="템플릿 이름" style="font-size:.68rem;padding:3px 6px;width:96px;border:1px solid #ccc;border-radius:5px">';
+  h+='<button onclick="pivotSaveTemplate()" class="pv-tbtn">저장</button>';
+  h+='<select id="pvTplSel" onchange="pivotLoadTemplate()" title="선택하면 바로 적용됩니다" style="font-size:.68rem;padding:2px 4px"><option value="">(템플릿 선택)</option>';
+  list.forEach(function(t){ h+='<option value="'+esc(t.name)+'"'+(t.name===curTpl?' selected':'')+'>'+esc(t.name)+'</option>'; });
+  h+='</select>';
+  h+='<button onclick="pivotDeleteTemplate()" class="pv-tbtn">삭제</button>';
+  h+='<span style="width:1px;height:16px;background:#ddd"></span>';
+  h+='<select onchange="pivotSetPreset(this.value)" title="색상 조합" style="font-size:.68rem;padding:2px 4px">';
+  _PV_COLOR_PRESETS.forEach(function(p){ h+='<option value="'+p.id+'"'+(cfg.preset===p.id?' selected':'')+'>'+p.name+'</option>'; });
+  h+='</select>';
+  h+='<button onclick="pivotExportExcel()" class="pv-tbtn">⬇ 엑셀 다운로드</button>';
+  h+='</div></div>';
+
+  h+=pools();
+  h+='<div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap">';
+  h+='<div style="flex:1 1 100%;"><div style="font-size:.72rem;margin-bottom:3px;display:flex;align-items:center"><b>행 설정</b><span style="color:#999;font-size:.65rem;margin-left:6px">왼쪽→오른쪽 = 바깥→안쪽 그룹</span><button onclick="pivotClearZone(\'row\')" class="pv-tbtn" style="margin-left:auto;font-size:.62rem;padding:1px 7px">비우기</button></div>'+rowZone()+'</div>';
+  h+='<div style="flex:1 1 100%"><div style="font-size:.72rem;margin-bottom:3px;display:flex;align-items:center"><b>열 &amp; 값 설정</b><span style="color:#999;font-size:.65rem;margin-left:6px">필드는 아래로(계층) / 옆으로(별도 블록) · 값은 항상 맨 아래</span><button onclick="pivotClearZone(\'col\')" class="pv-tbtn" style="margin-left:auto;font-size:.62rem;padding:1px 7px">비우기</button></div>'+colZone()+'</div>';
+  h+='</div>';
+  h+='<div style="margin-top:10px;overflow:auto">'+_pivotTableHTML()+'</div></div>';
+  return h;
+}
+
+/* ── 엑셀 내보내기 ── */
+function pivotExportExcel(){
+  var cfg=_pivotCfgInit(); if(!cfg.rows.length){alert('행 필드를 놓아주세요.');return;}
+  var M=_pivotModel(),blocks=M.blocks,rorder=M.rorder,rmap=M.rmap,nf=cfg.rows.length;
+  var aoa=[],merges=[];
+  var r0=[],r1=[],r2=[];
+  cfg.rows.forEach(function(i){ r0.push(OUT_COLS[i]); r1.push(''); r2.push(''); });
+  cfg.rows.forEach(function(_,ci){ merges.push({s:{r:0,c:ci},e:{r:2,c:ci}}); });
+  var col=nf;
+  blocks.forEach(function(b){
+    var w=b.leaves.length+(b.showTotal?1:0);
+    r0.push(b.title); for(var j=1;j<w;j++)r0.push('');
+    merges.push({s:{r:0,c:col},e:{r:0,c:col+w-1}});
+    var i=0,cc=col;
+    while(i<b.leaves.length){ var lab=b.leaves[i].colLabel,n=0; while(i+n<b.leaves.length&&b.leaves[i+n].colLabel===lab)n++;
+      r1.push(lab); for(var q=1;q<n;q++)r1.push('');
+      if(n>1)merges.push({s:{r:1,c:cc},e:{r:1,c:cc+n-1}});
+      cc+=n; i+=n; }
+    b.leaves.forEach(function(lf){ r2.push(lf.valLabel); });
+    if(b.showTotal){ r1.push('합계'); r2.push(''); merges.push({s:{r:1,c:col+b.leaves.length},e:{r:2,c:col+b.leaves.length}}); }
+    col+=w;
+  });
+  aoa.push(r0,r1,r2);
+  var subPos=(cfg.subFields||[]).map(function(f){return cfg.rows.indexOf(f);}).filter(function(p){return p>=0;});
+  subPos=subPos.filter(function(v,i){return subPos.indexOf(v)===i;}).sort(function(a,b){return a-b;});
+  var inner=subPos.length?subPos[subPos.length-1]:-1;
+  function segKey(k){ return inner>=0?k.slice(0,inner+1).join(''):'__all__'; }
+  var segs=[],cur=null,ck=null;
+  rorder.forEach(function(rk){ var sk=segKey(rmap[rk].k); if(sk!==ck){cur=[];segs.push(cur);ck=sk;} cur.push(rk); });
+  function cellOut(lf,v,base){ if(!lf.num)return v||''; if(lf.pct)return base>0?Math.round(v/base*1000)/10:''; return v||0; }
+  function subRow(pos,rkeys){
+    var lbl=rmap[rkeys[0]].k[pos],r=[]; for(var i=0;i<nf;i++)r.push(i===0?('▸ '+lbl+' 소계'):'');
+    blocks.forEach(function(b){ var sub=b.leaves.map(function(){return 0;}),stot=0,byType={};
+      rkeys.forEach(function(rk){ b.cells[rk].forEach(function(v,li){ if(b.leaves[li].num)sub[li]+=v; }); stot+=b.rowTot[rk];
+        var bt=b.rowTotByType[rk]; for(var k in bt)byType[k]=(byType[k]||0)+bt[k]; });
+      b.leaves.forEach(function(lf,li){ r.push(lf.num?cellOut(lf,sub[li],byType[lf.v.type]||0):''); });
+      if(b.showTotal)r.push(stot); });
+    return r;
+  }
+  var acc={}; subPos.forEach(function(p){acc[p]=[];});
+  segs.forEach(function(seg,si){
+    var keys=seg.map(function(rk){return rmap[rk].k;});
+    var span=[]; for(var i=0;i<keys.length;i++)span.push([]);
+    for(var ci=0;ci<nf;ci++){
+      if(_PV_NOMERGE_ROWS.indexOf(cfg.rows[ci])>=0){ for(var r2i=0;r2i<keys.length;r2i++)span[r2i][ci]=1; continue; }
+      var r3=0; while(r3<keys.length){ var pref=keys[r3].slice(0,ci+1).join(''); var e=r3+1;
+        while(e<keys.length&&keys[e].slice(0,ci+1).join('')===pref)e++;
+        span[r3][ci]=e-r3; for(var q=r3+1;q<e;q++)span[q][ci]=0; r3=e; }
+    }
+    var base=aoa.length;
+    seg.forEach(function(rk,ri){
+      var kk=rmap[rk].k,r=[];
+      for(var ci=0;ci<nf;ci++){ if(span[ri][ci]>0){ r.push(kk[ci]); if(span[ri][ci]>1)merges.push({s:{r:base+ri,c:ci},e:{r:base+ri+span[ri][ci]-1,c:ci}}); } else r.push(''); }
+      blocks.forEach(function(b){ var arr=b.cells[rk],bt=b.rowTotByType[rk]||{};
+        b.leaves.forEach(function(lf,li){ r.push(cellOut(lf,arr[li],bt[lf.v.type]||0)); });
+        if(b.showTotal)r.push(b.rowTot[rk]); });
+      aoa.push(r);
+    });
+    subPos.forEach(function(p){ seg.forEach(function(rk){acc[p].push(rk);}); });
+    var nextK=(si+1<segs.length)?rmap[segs[si+1][0]].k:null,curK=rmap[seg[0]].k;
+    subPos.slice().sort(function(a,b){return b-a;}).forEach(function(p){
+      var closing=!nextK||nextK.slice(0,p+1).join('')!==curK.slice(0,p+1).join('');
+      if(closing){ aoa.push(subRow(p,acc[p])); acc[p]=[]; } });
+  });
+  var gr=[]; for(var i=0;i<nf;i++)gr.push(i===0?'총합계':'');
+  blocks.forEach(function(b){ b.leaves.forEach(function(lf,li){ gr.push(lf.num?cellOut(lf,b.colTot[li],b.grandByType[lf.v.type]||0):''); }); if(b.showTotal)gr.push(b.grand); });
+  aoa.push(gr);
+  var mx=0; aoa.forEach(function(r){ if(r&&r.length>mx)mx=r.length; });
+  var cols=[]; for(var i2=0;i2<mx;i2++)cols.push(i2<nf?18:13);
+  exportAOAStyled(aoa,merges,{cols:cols,headerRows:3,name:'피벗',file:'피벗요약_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx'});
 }
 function renderSummaryTab(){
   try{ syncSettingsQuiet(); }catch(e){}   /* 요약 설정도 계정에 저장 */
@@ -8763,7 +8985,7 @@ window._fbLastSave=0; window._fbSaving=false;
 function _fbAgoText(){
   if(!window._fbCurrentCampaign)return '캠페인을 선택하세요';
   if(window._fbSaving)return '저장 중…';
-  if(window._pvDirty)return '⚠ 저장되지 않은 변경 있음 — [☁ 저장]을 누르세요';
+  if(window._pvDirty)return '⚠ 저장되지 않은 변경 있음 — [저장]을 누르세요';
   if(!window._fbLastSave)return '';
   var sec=Math.floor((Date.now()-window._fbLastSave)/1000);
   if(sec<60)return sec+'초 전 저장 완료';
@@ -8826,7 +9048,7 @@ function _fbRenderCampList(){
         +'<div style="flex:1;min-width:0"><b style="font-size:.75rem">'+esc(d.name||doc.id)+'</b>'+(cur?' <span style="color:#0068b5;font-size:.6rem;font-weight:700">● 편집 중</span>':'')
         +'<br><span style="color:#aaa;font-size:.6rem">'+(d.updatedAt?new Date(d.updatedAt).toLocaleString():'')+(d.rowCount?(' · '+d.rowCount+'행'):'')+'</span>'
         +(cur?'<br><span id="fbSaveStatus" style="font-size:.62rem;color:#7a7a7a"></span>':'')+'</div>'
-        +(cur?'<button onclick="fbSaveCampaign()" title="현재 편집 내용을 이 캠페인에 저장합니다" style="font-size:.64rem;padding:4px 10px;border:none;border-radius:5px;background:#1d7a46;color:#fff;cursor:pointer;font-weight:700">☁ 저장</button>'
+        +(cur?'<button onclick="fbSaveCampaign()" title="현재 편집 내용을 이 캠페인에 저장합니다" style="font-size:.64rem;padding:4px 10px;border:none;border-radius:5px;background:#1d7a46;color:#fff;cursor:pointer;font-weight:700">저장</button>'
              :'<button onclick="fbLoadCampaign(\''+doc.id+'\')" style="font-size:.64rem;padding:4px 9px;border:1px solid #8ab;border-radius:5px;background:#eef6ff;color:#0068b5;cursor:pointer;font-weight:700">열기</button>')
         +'<button onclick="fbDuplicateCampaign(\''+doc.id+'\')" title="이 캠페인을 복제합니다" style="font-size:.64rem;padding:4px 8px;border:1px solid #bbb;border-radius:5px;background:#fff;color:#555;cursor:pointer">복제</button>'
         +'<button onclick="fbDeleteCampaign(\''+doc.id+'\',\''+esc((d.name||'').replace(/\'/g,''))+'\')" style="font-size:.64rem;padding:4px 8px;border:1px solid #e6c0c0;border-radius:5px;background:#fff;color:#c0392b;cursor:pointer">삭제</button>'
@@ -8899,6 +9121,6 @@ function fbDeleteCampaign(id,nm){
     _fbRenderCampList();
   }).catch(function(e){alert('삭제 실패: '+e.message);});
 }
-/* 자동 저장 없음 — [☁ 저장] 버튼을 눌렀을 때만 클라우드에 기록됩니다. */
+/* 자동 저장 없음 — [저장] 버튼을 눌렀을 때만 클라우드에 기록됩니다. */
 /* 로그아웃/새로고침 전 미저장 경고는 기존 beforeunload가 처리 */
 </script>

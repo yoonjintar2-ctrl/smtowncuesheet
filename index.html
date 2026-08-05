@@ -539,19 +539,19 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
       <button class="tab-btn active" data-tab="filter" onclick="switchMainTab('filter')">대시보드</button>
       <button class="tab-btn" data-tab="summary" onclick="switchMainTab('summary');renderSummaryTab()">요약</button>
       <button class="tab-btn" data-tab="calendar" onclick="switchMainTab('calendar')">캘린더</button>
-      <button class="tab-btn" onclick="openAnalysisPopup()" title="프로그램별·주차별 편성표(품목 색상)">편성표</button>
+      <button class="tab-btn" data-tab="analysis" onclick="switchMainTab('analysis')" title="프로그램별·주차별 편성표(품목 색상)">편성표</button>
 
 
 
     </div>
     <div class="app-topbar-right">
+      <div id="fbAuthBar" style="display:flex;align-items:center;gap:6px"></div>
       <button class="tbr-btn" onclick="addMoreOnboarding()" title="방송사 엑셀 큐시트를 팝업에서 추가 온보딩">방송사 큐시트 추가</button>
       <button id="mergeBtn" disabled onclick="confirmAndMerge()">
         <div class="spinner" style="display:none;width:14px;height:14px;border-width:2px;margin-right:4px"></div>
         <span class="btn-label">엑셀 다운로드</span>
       </button>
       <span style="font-size:.58rem;color:rgba(255,255,255,.35);font-family:'Space Mono',monospace;white-space:nowrap;line-height:1.3;text-align:right;margin-left:2px">v3.3 Beta<br>2026-07-27</span>
-      <div id="fbAuthBar" style="display:flex;align-items:center;gap:6px;margin-left:2px"></div>
       <button class="tbr-btn" onclick="openSettings(null);_initCprpOnSettingsOpen()" title="세부 설정" style="font-size:1.05rem;line-height:1;padding:4px 9px">⚙</button>
     </div>
   </div>
@@ -636,7 +636,6 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
       <div class="preview-section" style="display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden">
         <!-- 큐시트 data table FIRST -->
         <div style="background:var(--surface2);border-bottom:1px solid var(--border);padding:4px 10px;display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;row-gap:2px">
-          <span style="font-size:.82rem;font-weight:700;color:var(--text)">📊 큐시트</span>
           <button id="pvUndoBtn" onclick="pvUndo()" disabled style="opacity:.4;font-size:.72rem;padding:3px 9px;background:#fff;border:1px solid #aaa;border-radius:5px;color:#444;cursor:default" title="되돌리기 (Ctrl+Z)">↶ 되돌리기</button>
           <button id="pvRedoBtn" onclick="pvRedo()" disabled style="opacity:.4;font-size:.72rem;padding:3px 9px;background:#fff;border:1px solid #aaa;border-radius:5px;color:#444;cursor:default" title="다시실행 (Ctrl+Y)">↷ 다시실행</button>
           <button id="pvDeleteCheckedBtn" onclick="pvDeleteCheckedRows()" disabled style="opacity:.5;font-size:.68rem;padding:3px 10px;background:#fff3f3;border:1px solid #e88;border-radius:5px;color:#c33;font-weight:600;cursor:default" title="맨 왼쪽 체크박스로 선택한 행을 삭제합니다">선택 행 삭제</button>
@@ -683,7 +682,6 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
     <div class="preview-outer" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">
       <div class="preview-section" style="display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden">
         <div style="background:var(--surface2);border-bottom:1px solid var(--border);padding:4px 10px;display:flex;align-items:center;gap:8px;flex-shrink:0">
-          <span style="font-size:.82rem;font-weight:700;color:var(--text)">📊 요약</span>
         </div>
         <div style="flex:1;min-height:0;overflow-y:auto;background:#fff;padding:14px 16px">
           <div id="summaryTabBody">데이터를 불러오면 요약이 표시됩니다.</div>
@@ -697,9 +695,8 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
     <div class="preview-outer" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">
       <div class="preview-section" style="display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden">
         <div style="background:var(--surface2);border-bottom:1px solid var(--border);padding:4px 10px;display:flex;align-items:center;gap:8px;flex-shrink:0">
-          <span style="font-size:.82rem;font-weight:700;color:var(--text)">📅 캘린더</span>
+<span></span>
           <span id="calendarMonthTitle" style="font-size:.78rem;font-weight:600;color:#666"></span>
-          <button onclick="openCalChOrder()" style="margin-left:auto;font-size:.68rem;padding:3px 10px;background:#eef6ff;border:1px solid #8ab;border-radius:5px;color:#0068b5;font-weight:600;cursor:pointer" title="캘린더 채널 표시 순서 변경(계정에 저장)">채널 순서</button>
         </div>
         <div id="calendarFilterBar" style="background:#fff;border-bottom:1px solid var(--border);padding:4px 10px;font-size:.7rem;flex-shrink:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
         <div id="calendarSummaryBar" style="background:#f7f8fb;border-bottom:1px solid var(--border);padding:3px 10px;font-size:.66rem;color:#777;flex-shrink:0;line-height:1.5"></div>
@@ -709,6 +706,19 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
       </div>
     </div>
   </div><!-- /calendarPage -->
+
+  <!-- Analysis(편성표) page (독립 페이지) -->
+  <div class="main-data-area" id="analysisPage" style="display:none">
+    <div class="preview-outer" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">
+      <div class="preview-section" style="display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden">
+        <div id="anPageBar" style="background:var(--surface2);border-bottom:1px solid var(--border);padding:4px 10px;display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;row-gap:3px"></div>
+        <div style="flex:1;min-height:0;overflow:auto;background:#fff;padding:10px 12px">
+          <div id="anPageColorBar" style="margin-bottom:8px"></div>
+          <div id="anPageBody">데이터를 불러오면 편성표가 표시됩니다.</div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /analysisPage -->
 
 </div><!-- /mainApp -->
 <style>
@@ -889,20 +899,9 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
     </div>
   </div>
 </div>
-<div id="gp-analysis" class="gp-overlay" onclick="if(event.target===this)closePopup('analysis')">
-  <div class="gp-modal" style="width:min(1900px,99vw);max-height:94vh">
-    <div class="gp-hd">
-      <span class="gp-title">📋 편성표 (프로그램별 · 주차별)</span>
-      <div class="gp-acts">
-        <button class="gp-ok" onclick="anSaveOrder()">저장</button>
-        <button class="gp-cancel" onclick="anCloseAnalysis()">닫기</button>
-      </div>
-    </div>
-    <div class="gp-body">
-      <div id="analysisFilterBar" style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.74rem"></div>
-      <div id="analysisPopupBody" style="overflow:auto"></div>
-    </div>
-  </div>
+<div id="gp-analysis" style="display:none">
+  <div id="analysisFilterBar" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.74rem"></div>
+  <div id="analysisPopupBody" style="overflow:auto"></div>
 </div>
 
 <!-- Column Configurator Modal -->
@@ -2659,11 +2658,11 @@ function pivotChipOver(e,el){ if(e.preventDefault)e.preventDefault(); el.style.b
 function pivotChipLeave(e,el){ el.style.boxShadow=''; }
 function pivotChipDrop(e,kind,i){ if(e.preventDefault)e.preventDefault(); var s=window._pvChip; window._pvChip=null; if(!s||s.kind!==kind)return; var c=_pivotCfgInit(); var arr=(kind==='row'?c.rows:c.cols).slice(); var fi=arr.indexOf(s.i); if(fi<0)return; arr.splice(fi,1); var ti=arr.indexOf(i); if(ti<0)ti=arr.length; arr.splice(ti,0,s.i); if(kind==='row')c.rows=arr; else c.cols=arr; renderSummaryTab(); }
 function pivotColStructDragStart(e,tok){ window._pvCSDrag=tok; if(e.dataTransfer)e.dataTransfer.effectAllowed='move'; }
-function pivotColStructOver(e,el){ if(e.preventDefault)e.preventDefault(); var rect=el.getBoundingClientRect(); var lower=(e.clientY-rect.top)>rect.height/2; el.style.boxShadow=lower?'inset 0 -5px 0 #0068b5':'inset 0 5px 0 #16a34a'; el.setAttribute('data-zone',lower?'nest':'flat'); }
+function pivotColStructOver(e,el){ if(e.preventDefault)e.preventDefault(); var rect=el.getBoundingClientRect(); var right=(e.clientX-rect.left)>rect.width/2; /* 오른쪽에 놓으면 '옆에 나열'(flat), 왼쪽에 놓으면 '하위 계층'(nest) */ el.style.boxShadow=right?'inset -5px 0 0 #16a34a':'inset 5px 0 0 #0068b5'; el.setAttribute('data-zone',right?'flat':'nest'); }
 function pivotColStructLeave(e,el){ el.style.boxShadow=''; }
 function pivotColStructDrop(e,el,targetTok){ if(e.preventDefault)e.preventDefault(); var zone=el.getAttribute('data-zone')||'nest'; el.style.boxShadow=''; var drag=window._pvCSDrag; window._pvCSDrag=null; if(drag==null||drag===targetTok)return; var c=_pivotCfgInit(); var cols=c.cols.slice(); var fi=cols.indexOf(drag); if(fi<0)return; cols.splice(fi,1); var ti=cols.indexOf(targetTok); cols.splice(ti+1,0,drag); c.cols=cols; if(!c.colJoin)c.colJoin={}; c.colJoin[drag]=(zone==='nest')?'nest':'flat'; renderSummaryTab(); }
 function pivotSaveTemplate(){ var el=document.getElementById('pvTplName'); var nm=((el&&el.value)||'').trim(); if(!nm){alert('템플릿 이름을 입력하세요.');return;} if(!window._pivotTemplates)window._pivotTemplates=[]; var cfg=JSON.parse(JSON.stringify(_pivotCfgInit())); var ex=window._pivotTemplates.filter(function(t){return t.name===nm;})[0]; if(ex){ if(!confirm('같은 이름의 템플릿을 덮어쓸까요?'))return; ex.cfg=cfg; } else { window._pivotTemplates.push({name:nm,cfg:cfg}); } if(typeof saveRulesToFile==='function'){try{saveRulesToFile();}catch(e){}} renderSummaryTab(); }
-function pivotLoadTemplate(){ var sel=document.getElementById('pvTplSel'); if(!sel||!sel.value)return; var t=(window._pivotTemplates||[]).filter(function(x){return x.name===sel.value;})[0]; if(!t)return; window._pivotCfg=JSON.parse(JSON.stringify(t.cfg)); _pivotCfgInit(); renderSummaryTab(); }
+function pivotLoadTemplate(){ var sel=document.getElementById('pvTplSel'); if(!sel||!sel.value)return; window._pvTplSelected=sel.value; var t=(window._pivotTemplates||[]).filter(function(x){return x.name===sel.value;})[0]; if(!t)return; window._pivotCfg=JSON.parse(JSON.stringify(t.cfg)); _pivotCfgInit(); renderSummaryTab(); }
 function pivotDeleteTemplate(){ var sel=document.getElementById('pvTplSel'); if(!sel||!sel.value)return; if(!confirm('템플릿 "'+sel.value+'"를 삭제할까요?'))return; window._pivotTemplates=(window._pivotTemplates||[]).filter(function(x){return x.name!==sel.value;}); if(typeof saveRulesToFile==='function'){try{saveRulesToFile();}catch(e){}} renderSummaryTab(); }
 function _pivotTemplateBar(){
   var list=window._pivotTemplates||[];
@@ -2671,11 +2670,12 @@ function _pivotTemplateBar(){
   h+='<button onclick="pivotExportExcel()" style="font-size:.7rem;padding:3px 10px;border:1px solid #1d7a46;border-radius:5px;background:#eafaf0;color:#1d7a46;font-weight:600;cursor:pointer">⬇ 엑셀 다운로드</button>';
   h+='<span style="width:10px"></span><b>템플릿</b><input id="pvTplName" placeholder="이름" style="font-size:.7rem;padding:2px 6px;width:100px">';
   h+='<button onclick="pivotSaveTemplate()" style="font-size:.7rem;padding:3px 9px;border:none;border-radius:5px;background:#0068b5;color:#fff;cursor:pointer">저장</button>';
-  h+='<select id="pvTplSel" style="font-size:.7rem"><option value="">(선택)</option>';
-  list.forEach(function(t){ h+='<option value="'+esc(t.name)+'">'+esc(t.name)+'</option>'; });
-  h+='</select><button onclick="pivotLoadTemplate()" style="font-size:.7rem;padding:3px 9px;border:1px solid #ccc;border-radius:5px;background:#fff;cursor:pointer">불러오기</button>';
+  var _cur=window._pvTplSelected||'';
+  h+='<select id="pvTplSel" onchange="pivotLoadTemplate()" title="선택하면 바로 적용됩니다" style="font-size:.7rem"><option value="">(선택)</option>';
+  list.forEach(function(t){ h+='<option value="'+esc(t.name)+'"'+(t.name===_cur?' selected':'')+'>'+esc(t.name)+'</option>'; });
+  h+='</select>';
   h+='<button onclick="pivotDeleteTemplate()" style="font-size:.7rem;padding:3px 9px;border:1px solid #e0b0b0;border-radius:5px;background:#fff;color:#c0392b;cursor:pointer">삭제</button>';
-  h+='<span style="color:#aaa">저장됨 '+list.length+'개 · 구글 계정 연동 예정</span></div>';
+  h+='<span style="color:#aaa">저장됨 '+list.length+'개 · 구글 계정에 동기화</span></div>';
   return h;
 }
 function renderPivotBuilder(){
@@ -2683,7 +2683,7 @@ function renderPivotBuilder(){
   function jsTok(t){ return (typeof t==='string')?("'"+t+"'"):t; }
   function checklist(kind){ var items=kind==='row'?_pivotRowFlds():_pivotColItems(); var arr=kind==='row'?cfg.rows:cfg.cols; var h='<div style="max-height:128px;overflow:auto;border:1px solid #e0e0e6;border-radius:5px;padding:4px 6px;min-width:108px">'; items.forEach(function(t){ h+='<label style="display:block;white-space:nowrap;cursor:pointer"><input type="checkbox" onchange="pivotToggleField(\''+kind+'\','+jsTok(t)+',this.checked)"'+(arr.indexOf(t)>=0?' checked':'')+'> '+esc(_pvTokLabel(t))+'</label>'; }); return h+'</div>'; }
   function chips(kind){ var arr=kind==='row'?cfg.rows:cfg.cols; if(!arr.length)return '<span style="color:#aaa;font-size:.68rem">없음</span>'; var h=''; arr.forEach(function(t){ h+='<span draggable="true" ondragstart="pivotChipDragStart(event,\''+kind+'\','+jsTok(t)+')" ondragover="pivotChipOver(event,this)" ondragleave="pivotChipLeave(event,this)" ondrop="pivotChipDrop(event,\''+kind+'\','+jsTok(t)+')" style="display:inline-block;padding:2px 9px;margin:2px;background:#eef;border:1px solid #ccd;border-radius:12px;cursor:grab;font-size:.7rem">⠿ '+esc(_pvTokLabel(t))+'</span>'; }); return h; }
-  function colStructUI(){ if(!cfg.cols.length)return '<span style="color:#aaa;font-size:.68rem">열 필드를 선택하세요</span>'; var groups=[],g=[]; cfg.cols.forEach(function(tok,idx){ var j=cfg.colJoin?cfg.colJoin[tok]:null; if(idx===0||j!=='flat'){g.push(tok);}else{groups.push(g);g=[tok];} }); if(g.length)groups.push(g); function chip(tok,ind){ return '<div draggable="true" ondragstart="pivotColStructDragStart(event,'+jsTok(tok)+')" ondragover="pivotColStructOver(event,this)" ondragleave="pivotColStructLeave(event,this)" ondrop="pivotColStructDrop(event,this,'+jsTok(tok)+')" style="padding:2px 9px;margin:2px 0 2px '+(ind*14)+'px;background:#eef;border:1px solid #ccd;border-radius:10px;cursor:grab;font-size:.7rem">'+(ind?'▸ ':'')+esc(_pvTokLabel(tok))+'</div>'; } var h='<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;margin-top:2px">'; groups.forEach(function(grp){ h+='<div style="border:1px dashed #bbc;border-radius:8px;padding:4px 6px;background:#fff">'; grp.forEach(function(tok,gi){ h+=chip(tok,gi); }); h+='</div>'; }); return h+'</div>'; }
+  function colStructUI(){ if(!cfg.cols.length)return '<span style="color:#aaa;font-size:.68rem">열 필드를 선택하세요</span>'; var _hint='<div style="font-size:.64rem;color:#888;margin-bottom:4px">칩을 다른 칩의 <b style="color:#0068b5">왼쪽</b>에 놓으면 <b>하위 계층</b>, <b style="color:#16a34a">오른쪽</b>에 놓으면 <b>옆에 나열</b>됩니다.</div>'; var groups=[],g=[]; cfg.cols.forEach(function(tok,idx){ var j=cfg.colJoin?cfg.colJoin[tok]:null; if(idx===0||j!=='flat'){g.push(tok);}else{groups.push(g);g=[tok];} }); if(g.length)groups.push(g); function chip(tok,ind){ return '<div draggable="true" ondragstart="pivotColStructDragStart(event,'+jsTok(tok)+')" ondragover="pivotColStructOver(event,this)" ondragleave="pivotColStructLeave(event,this)" ondrop="pivotColStructDrop(event,this,'+jsTok(tok)+')" style="padding:2px 9px;margin:2px 0 2px '+(ind*14)+'px;background:#eef;border:1px solid #ccd;border-radius:10px;cursor:grab;font-size:.7rem">'+(ind?'▸ ':'')+esc(_pvTokLabel(tok))+'</div>'; } var h=_hint+'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;margin-top:2px">'; groups.forEach(function(grp){ h+='<div style="border:1px dashed #bbc;border-radius:8px;padding:4px 6px;background:#fff">'; grp.forEach(function(tok,gi){ h+=chip(tok,gi); }); h+='</div>'; }); return h+'</div>'; }
   var h='<div style="border:1px solid #d8d8de;border-radius:8px;padding:10px 12px;margin-bottom:12px;background:#fafafd">';
   h+='<div style="font-weight:700;font-size:.82rem;margin-bottom:8px">🧮 피벗 요약 <span style="font-weight:400;color:#888;font-size:.7rem">· 현재 큐시트 필터 기준</span></div>';
   h+='<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;font-size:.72rem">';
@@ -2956,7 +2956,8 @@ function renderCalendarFilterBar(){
   function sel(key,col,label){ var vals=_calDistinct(col); var h='<select onchange="window._calFilters.'+key+'=this.value;renderCalendarTab()" style="font-size:.68rem;max-width:140px"><option value="">'+label+' (전체)</option>'; vals.forEach(function(v){ h+='<option value="'+esc(v)+'"'+(f[key]===v?' selected':'')+'>'+esc(v)+'</option>'; }); return h+'</select>'; }
   el.innerHTML='<span style="color:#888">필터</span>'+sel('ch',0,'채널')+sel('item',1,'품목')+sel('pp',33,'PP')
     +'<button onclick="window._calFilters={ch:\'\',item:\'\',pp:\'\'};renderCalendarTab()" style="font-size:.64rem;padding:2px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer">해제</button>'
-    +'<span style="margin-left:14px;color:#888">정렬</span><select onchange="calSetSort(this.value)" style="font-size:.68rem"><option value="channel"'+(sm==='channel'?' selected':'')+'>채널 그룹</option><option value="time"'+(sm==='time'?' selected':'')+'>시작시간 순(채널 무관)</option></select>';
+    +'<span style="margin-left:14px;color:#888">정렬</span><select onchange="calSetSort(this.value)" style="font-size:.68rem"><option value="channel"'+(sm==='channel'?' selected':'')+'>채널 그룹</option><option value="time"'+(sm==='time'?' selected':'')+'>시작시간 순(채널 무관)</option></select>'
+    +'<button onclick="openCalChOrder()" style="margin-left:10px;font-size:.66rem;padding:2px 9px;background:#eef6ff;border:1px solid #8ab;border-radius:5px;color:#0068b5;font-weight:600;cursor:pointer" title="캘린더 채널 표시 순서 변경(계정에 저장)">채널 순서</button>';
 }
 function renderCalendarTab(){
   var el=document.getElementById('calendarTabBody');
@@ -3079,13 +3080,16 @@ function switchMainTab(tab){
   var mda=document.getElementById('mainDataArea');
   var sp=document.getElementById('summaryPage');
   var cp=document.getElementById('calendarPage');
+  var ap=document.getElementById('analysisPage');
   if(mda)mda.style.display=(tab==='filter')?'flex':'none';
   if(sp)sp.style.display=(tab==='summary')?'flex':'none';
   if(cp)cp.style.display=(tab==='calendar')?'flex':'none';
+  if(ap)ap.style.display=(tab==='analysis')?'flex':'none';
   // 공유 필터 툴바: 대시보드/캘린더에서만 표시(요약은 필터 미적용)
   var ft=document.getElementById('sharedFilterToprow');
   if(ft)ft.style.display=(tab==='filter'||tab==='calendar')?'':'none';
   if(tab==='calendar')renderCalendarTab();
+  if(tab==='analysis'){ try{ renderAnalysisPage(); }catch(e){ console.warn('analysis',e); } }
 }
 
 function goToMainTab(tab){
@@ -3527,8 +3531,8 @@ function filterLiveRowsByPV(body){
 }
 function renderLivePreview(){
   var loaded=files.filter(function(f){return f.status==='loaded';}).length;
-  if(!loaded&&(!_liveRows||_liveRows.length<2))return;
-  if(!_liveRows||_liveRows.length<2)_liveRows=buildPreviewNormRows();
+  if(!loaded&&!_liveRows)return;
+  if(!_liveRows)_liveRows=buildPreviewNormRows();
   var colSel=(_colConfig&&_colConfig.length)?_colConfig:_defaultColConfig();
   colSel=colSel.filter(function(_hc){return _HIDDEN_COLS.indexOf(_hc)<0;});
   window._pvVisCols=colSel;
@@ -6059,12 +6063,21 @@ function manualSave(){
 }
 
 function importOnboardingJSON(){
+  /* JSON 불러오기는 '현재 열려있는 캠페인'을 덮어쓰지 않는다.
+     불러온 뒤에는 캠페인 연결을 끊어(미선택 상태) 자동 저장이 다른 캠페인에 기록되는 것을 막는다. */
+  var hadCamp=!!window._fbCurrentCampaign;
+  if(hadCamp&&!confirm('JSON을 불러오면 화면의 데이터가 교체됩니다.\n현재 캠페인 "'+(window._fbCampName||'')+'"과의 연결은 끊기며,\n불러온 데이터는 [캠페인 관리]에서 저장할 캠페인을 직접 고른 뒤 저장됩니다.\n\n계속할까요?'))return;
   var input=document.createElement('input'); input.type='file'; input.accept='.json,application/json';
   input.onchange=function(){
     if(!input.files[0])return;
     var reader=new FileReader();
     reader.onload=function(e){
-      try{ _restoreFromPayload(JSON.parse(e.target.result)); if(typeof showSaveToast==='function')showSaveToast('불러왔습니다.'); }
+      try{
+        _restoreFromPayload(JSON.parse(e.target.result));
+        window._fbCurrentCampaign=null; window._fbCampName=''; window._fbLastSave=0; window._pvDirty=false;
+        try{ _fbUpdateUI(); _fbRefreshSaveLabel(); }catch(_e){}
+        if(typeof showSaveToast==='function')showSaveToast(hadCamp?'불러왔습니다. (캠페인 미선택 — 저장하려면 캠페인을 고르세요)':'불러왔습니다.');
+      }
       catch(err){ if(typeof showSaveToast==='function')showSaveToast('불러오기 실패: '+err.message,true); }
     };
     reader.readAsText(input.files[0]);
@@ -6159,6 +6172,7 @@ function anRowDrop(e){
 }
 function anSaveOrder(){
   window._anRowOrderSaved=(window._anCurrentOrder&&window._anCurrentOrder.length)?window._anCurrentOrder.slice():null;
+  if(typeof saveRulesToFile==='function'){try{saveRulesToFile();}catch(e){}}
   if(typeof _autoSaveNow==='function')_autoSaveNow();
   if(typeof showSaveToast==='function')showSaveToast('편성표 순서가 저장되었습니다.');
 }
@@ -6167,16 +6181,34 @@ function anCloseAnalysis(){
   closePopup('analysis');
 }
 
-function openAnalysisPopup(){
-  openPopup('analysis');
-  window._anRowOrder=(window._anRowOrderSaved&&window._anRowOrderSaved.length)?window._anRowOrderSaved.slice():null;
+function openAnalysisPopup(){ switchMainTab('analysis'); }
+/* 편성표를 독립 페이지로 렌더(모달의 필터바/본문 노드를 페이지로 옮겨 재사용) */
+function renderAnalysisPage(){
+  var page=document.getElementById('anPageBody'); var bar=document.getElementById('anPageBar');
+  if(!page||!bar)return;
+  var fb=document.getElementById('analysisFilterBar');
+  var bd=document.getElementById('analysisPopupBody');
+  if(bar&&!bar.querySelector('#anPageActs')){
+    var acts=document.createElement('div'); acts.id='anPageActs';
+    acts.style.cssText='display:flex;gap:6px;align-items:center;margin-left:auto';
+    acts.innerHTML='<button onclick="anSaveOrder()" style="font-size:.68rem;padding:3px 12px;background:#eafaf0;border:1px solid #7c7;border-radius:5px;color:#1d7a46;font-weight:700;cursor:pointer">순서 저장</button>'
+      +'<button onclick="anRevertOrder()" style="font-size:.68rem;padding:3px 10px;background:#fff;border:1px solid #aaa;border-radius:5px;color:#444;font-weight:600;cursor:pointer" title="저장된 순서로 되돌립니다">↺ 되돌리기</button>';
+    bar.appendChild(acts);
+  }
+  if(fb&&fb.parentNode!==bar){ fb.style.margin='0'; fb.style.flex='1 1 auto'; bar.insertBefore(fb,bar.firstChild); }
+  if(bd&&bd.parentNode!==page){ page.innerHTML=''; page.appendChild(bd); }
+  _anRenderCore();
+}
+function anRevertOrder(){ window._anRowOrder=(window._anRowOrderSaved&&window._anRowOrderSaved.length)?window._anRowOrderSaved.slice():null; _anRenderCore(); }
+function _anRenderCore(){
+  window._anRowOrder=(window._anRowOrderSaved&&window._anRowOrderSaved.length)?window._anRowOrderSaved.slice():window._anRowOrder;
   var body=document.getElementById('analysisPopupBody');
   var filterBar=document.getElementById('analysisFilterBar');
   if(!body)return;
   var rows=_liveRows?_liveRows.slice(1):[];
   if(!rows.length){
     if(filterBar)filterBar.innerHTML='';
-    body.innerHTML='<div style="color:var(--muted);text-align:center;padding:40px">데이터가 없습니다. 파일을 로드해주세요.</div>';
+    body.innerHTML='<div style="color:var(--muted);text-align:center;padding:40px">데이터가 없습니다. 상단 [방송사 큐시트 추가] 버튼으로 큐시트를 올려주세요.</div>';
     return;
   }
 
@@ -8365,21 +8397,51 @@ window._fbReady=false; window._fbUser=null; window._fbCurrentCampaign=null; wind
   try{_fbUpdateUI();}catch(e){}
 })();
 function fbLogin(){ if(!window._fbReady){ alert('Firebase 설정이 아직 없습니다.\n온라인(https)에서 FIREBASE_CONFIG를 채우면 구글 로그인이 활성화됩니다.'); return; } var p=new firebase.auth.GoogleAuthProvider(); _fbAuth.signInWithPopup(p).catch(function(e){ alert('로그인 실패: '+e.message); }); }
-function fbLogout(){ _fbGuardUnsaved('로그아웃합니다.',function(){ if(window._fbAuth)_fbAuth.signOut(); window._fbCurrentCampaign=null; window._fbCampName=''; window._fbLastSave=0; _fbUpdateUI(); }); }
+function fbLogout(){ _fbGuardUnsaved('로그아웃합니다.',function(){
+  if(window._fbAuth)_fbAuth.signOut();
+  window._fbCurrentCampaign=null; window._fbCampName=''; window._fbLastSave=0; window._fbUser=null;
+  _fbResetLocalState();
+  _fbUpdateUI();
+}); }
+/* 로그아웃 시: 화면 데이터 제거 + 개인 설정을 기본값으로 되돌림(계정 데이터가 로컬에 남지 않게) */
+function _fbResetLocalState(){
+  try{
+    if(typeof files!=='undefined')files=[];
+    window._liveRows=null; if(typeof _liveRows!=='undefined')_liveRows=null;
+    window._consolidatedRows=null;
+    if(typeof _pvCheckedRows!=='undefined'&&_pvCheckedRows)_pvCheckedRows.clear();
+    window._pvUndoStack=[]; window._pvRedoStack=[]; window._pvDirty=false;
+    window._pvColFilters={}; window._pvSortKeys=[];
+    window._pivotTemplates=[]; window._pivotCfg=null; window._pvTplSelected='';
+    window._calFilters={ch:'',item:'',pp:''}; window._calChOrder=null; window._calSortMode='channel';
+    window._anRowOrder=null; window._anRowOrderSaved=null; window._anItemColors={};
+    try{ localStorage.removeItem('cusheet_rules_v1'); localStorage.removeItem('cusheet_autosave_v1'); }catch(e){}
+    if(typeof loadRules==='function')loadRules();           // 기본값으로 재로딩
+    if(typeof renderList==='function')renderList();
+    if(typeof updateBtn==='function')updateBtn();
+    var wrap=document.getElementById('previewTableWrap');
+    if(wrap)wrap.innerHTML='<div class="pv-empty">상단 [방송사 큐시트 추가] 버튼을 눌러 데이터를 업로드해 주세요</div>';
+    var sb=document.getElementById('summaryTabBody'); if(sb)sb.innerHTML='데이터를 불러오면 요약이 표시됩니다.';
+    var ab=document.getElementById('anPageBody'); if(ab)ab.innerHTML='데이터를 불러오면 편성표가 표시됩니다.';
+    if(typeof updatePreviewFilters==='function')updatePreviewFilters();
+    if(typeof renderCalendarTab==='function')renderCalendarTab();
+    if(typeof renderSummaryTab==='function')renderSummaryTab();
+  }catch(e){ console.warn('reset',e); }
+}
 function _fbBtn(txt,fn,extra){ return '<button onclick="'+fn+'" class="tbr-btn" style="font-size:.66rem;padding:3px 9px;'+(extra||'')+'">'+txt+'</button>'; }
 function _fbUpdateUI(){
   var el=document.getElementById('fbAuthBar'); if(!el)return;
   if(window._fbUser){
     var nm=esc(_fbUser.displayName||_fbUser.email||'사용자');
-    var camp=window._fbCampName
-      ?('<span style="font-size:.62rem;color:#8fe3c0;font-weight:700;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">▣ '+esc(window._fbCampName)+'</span><span id="fbTopSave" style="font-size:.58rem"></span>')
-      :'<span style="font-size:.62rem;color:#ffb3b3">캠페인 미선택</span>';
-    el.innerHTML='<span style="font-size:.66rem;color:rgba(255,255,255,.75)">👤 '+nm+'</span>'+camp
-      +_fbBtn('📁 캠페인 관리','openCampaignManager()','background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.3);font-weight:700')
-      +_fbBtn('로그아웃','fbLogout()','background:transparent;color:rgba(255,255,255,.55);border-color:rgba(255,255,255,.2)');
+    var camp=window._fbCampName?esc(window._fbCampName):'캠페인 미선택';
+    el.innerHTML=
+      '<button class="tbr-btn" onclick="openCampaignManager()" title="캠페인 생성 · 열기 · 삭제 (구글 계정 저장)" style="font-weight:700">📁 캠페인 관리<span id="fbTopSave" style="font-size:.62rem;margin-left:4px"></span></button>'
+      +'<button class="tbr-btn" onclick="openCampaignManager()" title="현재 편집 중인 캠페인" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">▣ '+camp+'</button>'
+      +'<button class="tbr-btn" onclick="openCampaignManager()" title="'+nm+' 계정으로 로그인됨">👤 '+nm+'</button>'
+      +'<button class="tbr-btn" onclick="fbLogout()" title="로그아웃">로그아웃</button>';
     try{_fbRefreshSaveLabel();}catch(e){}
   } else {
-    el.innerHTML=_fbBtn('🔑 Google 로그인','fbLogin()','background:#fff;color:#333;font-weight:700');
+    el.innerHTML='<button class="tbr-btn" onclick="fbLogin()" style="font-weight:700">🔑 Google 로그인</button>';
   }
 }
 function _fbUserDoc(){ return _fbDb.collection('users').doc(_fbUser.uid); }
@@ -8413,7 +8475,11 @@ setInterval(_fbRefreshSaveLabel,3000);
 
 /* 편집 중 캠페인이 미저장이면 저장 여부를 먼저 묻는다. 진행하면 cb() 실행 */
 function _fbGuardUnsaved(actionLabel,cb){
-  if(!window._fbCurrentCampaign||!window._pvDirty){ cb(); return; }
+  if(!window._fbCurrentCampaign){ cb(); return; }
+  if(!window._pvDirty){
+    if(!confirm('현재 편집 중인 캠페인 "'+(window._fbCampName||'')+'"에서 나갑니다.\n(변경사항은 모두 저장된 상태입니다)\n\n계속해서 '+actionLabel))return;
+    cb(); return;
+  }
   var nm=window._fbCampName||'현재 캠페인';
   var ans=confirm('⚠ "'+nm+'"에 저장되지 않은 변경사항이 있습니다.\n\n[확인] 저장한 뒤 '+actionLabel+'\n[취소] 여기서 멈춤(데이터 유지)\n\n저장하지 않고 '+actionLabel+' 경우 편집 중이던 데이터는 사라집니다.');
   if(!ans)return;
@@ -8456,14 +8522,12 @@ function _fbRenderCampList(){
 function fbCreateCampaign(){
   var inp=document.getElementById('fbNewCamp'); var nm=((inp&&inp.value)||'').trim();
   if(!nm){alert('캠페인 이름을 입력하세요.');return;}
-  _fbGuardUnsaved('새 캠페인을 만듭니다.',function(){
-    var rows=(typeof _liveRows!=='undefined'&&_liveRows)?_liveRows:[];
-    _fbCampCol().add({name:nm,liveRows:JSON.stringify(rows),rowCount:Math.max(0,rows.length-1),updatedAt:Date.now()}).then(function(ref){
-      window._fbCurrentCampaign=ref.id; window._fbCampName=nm; window._pvDirty=false; window._fbLastSave=Date.now();
-      if(inp)inp.value=''; _fbUpdateUI(); _fbRefreshSaveLabel(); _fbRenderCampList();
-      showSaveToast&&showSaveToast('캠페인 생성: '+nm);
-    }).catch(function(e){alert('생성 실패: '+e.message);});
-  });
+  /* 빈 캠페인만 만들고, 현재 편집 중인 캠페인은 그대로 둔다(자동 이동 없음) */
+  _fbCampCol().add({name:nm,liveRows:'[]',rowCount:0,updatedAt:Date.now()}).then(function(ref){
+    if(inp)inp.value='';
+    _fbRenderCampList();
+    showSaveToast&&showSaveToast('빈 캠페인 생성: '+nm+' (목록에서 [열기]를 눌러 이동)');
+  }).catch(function(e){alert('생성 실패: '+e.message);});
 }
 function fbLoadCampaign(id){
   _fbGuardUnsaved('다른 캠페인을 엽니다.',function(){ _fbDoLoad(id); });

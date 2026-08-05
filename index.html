@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>큐시트 정리 프로그램</title>
+<title>큐메이트</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -408,6 +409,9 @@ tr.pv-highlight-on td{background:rgba(251,191,36,.18)!important}
 .tab-btn:hover{color:#111;background:#f0f0f3}
 .tab-btn.active{color:#1a1a2e;border-bottom-color:var(--accent);font-weight:700}
 .app-topbar-right{display:flex;align-items:center;gap:7px;margin-left:auto}
+.pv-tbtn{font-size:.68rem;padding:3px 10px;background:#fff;border:1px solid #bbb;border-radius:5px;color:#444;font-weight:600;cursor:pointer;font-family:"Noto Sans KR",sans-serif;transition:all .12s}
+.pv-tbtn:hover:not(:disabled){background:#f2f2f4;border-color:#888;color:#111}
+.pv-tbtn:disabled{opacity:.45;cursor:default}
 .tbr-btn{background:#fff;border:1px solid #ccc;color:#444;font-size:.71rem;padding:5px 11px;border-radius:7px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
 .tbr-json{background:#eaf2ff!important;border-color:#8fb0e0!important;color:#2a5db0!important}
 .tbr-btn:hover{color:#111;border-color:#888}
@@ -532,7 +536,7 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
   <!-- Top bar -->
   <div class="app-topbar">
     <div class="app-brand" onclick="backToSetup()" title="파일 재선택">
-      <span class="brand-name">큐시트 정리 프로그램</span>
+      <span class="brand-name">큐메이트</span>
       <span class="brand-ver"></span>
     </div>
     <div class="app-tabs">
@@ -545,13 +549,13 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
 
     </div>
     <div class="app-topbar-right">
-      <div id="fbAuthBar" style="display:flex;align-items:center;gap:6px"></div>
-      <button class="tbr-btn" onclick="addMoreOnboarding()" title="방송사 엑셀 큐시트를 팝업에서 추가 온보딩">방송사 큐시트 추가</button>
+      <button class="tbr-btn" onclick="addMoreOnboarding()" title="방송사 엑셀 큐시트를 팝업에서 추가 온보딩">큐시트 추가</button>
       <button id="mergeBtn" disabled onclick="confirmAndMerge()">
         <div class="spinner" style="display:none;width:14px;height:14px;border-width:2px;margin-right:4px"></div>
         <span class="btn-label">엑셀 다운로드</span>
       </button>
       <span style="font-size:.58rem;color:rgba(255,255,255,.35);font-family:'Space Mono',monospace;white-space:nowrap;line-height:1.3;text-align:right;margin-left:2px">v3.3 Beta<br>2026-07-27</span>
+      <div id="fbAuthBar" style="display:flex;align-items:center;gap:6px;margin-left:6px"></div>
       <button class="tbr-btn" onclick="openSettings(null);_initCprpOnSettingsOpen()" title="세부 설정" style="font-size:1.05rem;line-height:1;padding:4px 9px">⚙</button>
     </div>
   </div>
@@ -636,14 +640,13 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
       <div class="preview-section" style="display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden">
         <!-- 큐시트 data table FIRST -->
         <div style="background:var(--surface2);border-bottom:1px solid var(--border);padding:4px 10px;display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;row-gap:2px">
-          <button id="pvUndoBtn" onclick="pvUndo()" disabled style="opacity:.4;font-size:.72rem;padding:3px 9px;background:#fff;border:1px solid #aaa;border-radius:5px;color:#444;cursor:default" title="되돌리기 (Ctrl+Z)">↶ 되돌리기</button>
-          <button id="pvRedoBtn" onclick="pvRedo()" disabled style="opacity:.4;font-size:.72rem;padding:3px 9px;background:#fff;border:1px solid #aaa;border-radius:5px;color:#444;cursor:default" title="다시실행 (Ctrl+Y)">↷ 다시실행</button>
-          <button id="pvDeleteCheckedBtn" onclick="pvDeleteCheckedRows()" disabled style="opacity:.5;font-size:.68rem;padding:3px 10px;background:#fff3f3;border:1px solid #e88;border-radius:5px;color:#c33;font-weight:600;cursor:default" title="맨 왼쪽 체크박스로 선택한 행을 삭제합니다">선택 행 삭제</button>
-          <button onclick="openFindReplace()" style="font-size:.68rem;padding:3px 10px;background:#f5f0ff;border:1px solid #a9a;border-radius:5px;color:#639;font-weight:600;cursor:pointer" title="열 값 찾아 바꾸기">🔎 찾아바꾸기</button>
-          <button onclick="pvAddRow()" style="font-size:.68rem;padding:3px 10px;background:#eafaf0;border:1px solid #7c7;border-radius:5px;color:#1d7a46;font-weight:600;cursor:pointer" title="빈 행을 직접 추가합니다(엑셀 온보딩 없이)">＋ 행 추가</button>
-          <button onclick="pvResetAllFilters()" style="font-size:.68rem;padding:3px 10px;background:#fff3f3;border:1px solid #e88;border-radius:5px;color:#c33;font-weight:600;cursor:pointer">필터 해제</button>
-          <button onclick="openColConfig()" style="font-size:.68rem;padding:3px 10px;background:#e8eeff;border:1px solid #99a;border-radius:5px;color:#3344aa;font-weight:600;cursor:pointer">열 설정</button>
-          <button onclick="_pvSortKeys=[];_pvSortLocked=false;renderLivePreview()" style="font-size:.68rem;padding:3px 10px;background:#fff;border:1px solid #aaa;border-radius:5px;color:#444;font-weight:600;cursor:pointer" title="정렬 새로고침">↻ 새로고침</button>
+          <button id="pvUndoBtn" onclick="pvUndo()" disabled class="pv-tbtn" style="opacity:.4;cursor:default" title="되돌리기 (Ctrl+Z)">↶ 되돌리기</button>
+          <button id="pvRedoBtn" onclick="pvRedo()" disabled class="pv-tbtn" style="opacity:.4;cursor:default" title="다시실행 (Ctrl+Y)">↷ 다시실행</button>
+          <button onclick="pvAddRow()" class="pv-tbtn" title="빈 행을 직접 추가합니다">＋ 행 추가</button>
+          <button id="pvDeleteCheckedBtn" onclick="pvDeleteCheckedRows()" disabled class="pv-tbtn" style="opacity:.5;cursor:default" title="맨 왼쪽 체크박스로 선택한 행을 삭제합니다">－ 행 삭제</button>
+          <button onclick="openFindReplace()" class="pv-tbtn" title="열 값 찾아 바꾸기">찾아바꾸기</button>
+          <button onclick="pvResetAllFilters()" class="pv-tbtn">필터 해제</button>
+          <button onclick="openColConfig()" class="pv-tbtn">열 설정</button>
           <span id="previewRowCount" style="font-size:.69rem;color:var(--muted);flex:1 1 auto;min-width:200px;white-space:normal;line-height:1.5"></span>
           <span id="previewPagerInline" style="margin-left:auto;display:flex;align-items:center;gap:4px"></span>
 
@@ -2366,6 +2369,14 @@ function clearAllFiles(){files=[];window._consolidatedRows=null;renderList();upd
 /* ── 추가 온보딩: 현재 편집 데이터를 JSON으로 통합 후 첫 화면으로 ── */
 function closeSetupModal(){ var sm=document.getElementById('setupModal'); if(sm)sm.style.display='none'; if(window._pvStaging){ window._pvStaging=false; files=files.filter(function(f){return f&&f.isConsolidated;}); try{ if(window._consolidatedRows&&window._consolidatedRows.length)_liveRows=[OUT_COLS.slice()].concat(window._consolidatedRows); }catch(e){} if(typeof renderList==='function')renderList(); if(typeof updateBtn==='function')updateBtn(); renderLivePreview(); } }
 function addMoreOnboarding(){
+  /* 큐시트 추가는 로그인 후에만 — 데이터가 계정의 캠페인에 저장되기 때문 */
+  if(window._fbReady&&!window._fbUser){
+    if(confirm('큐시트를 추가하려면 먼저 구글 로그인이 필요합니다.\n(작업 데이터는 로그인 계정의 캠페인에 저장됩니다)\n\n지금 로그인할까요?')){ try{fbLogin();}catch(e){} }
+    return;
+  }
+  if(!window._fbReady&&window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey){
+    alert('로그인 준비 중입니다. 잠시 후 다시 시도해 주세요.'); return;
+  }
   window._pvStaging=true;
   try{ if(_liveRows&&_liveRows.length>1)window._consolidatedRows=JSON.parse(JSON.stringify(_liveRows.slice(1))); }catch(e){}
   if(_liveRows&&_liveRows.length>1){files=[{name:'작업중_데이터.json',status:'loaded',isConsolidated:true,sheets:[]}];}else{files=[];window._consolidatedRows=null;}
@@ -2792,9 +2803,10 @@ function pivotExportExcel(){
   var acc={}; subPos.forEach(function(p){acc[p]=[];});
   segs.forEach(function(seg,si){ var keys=seg.map(function(rk){return rmap[rk].k;}); var span=[]; for(var _r=0;_r<keys.length;_r++)span.push([]); for(var ci=0;ci<nf;ci++){ var _r=0; while(_r<keys.length){ var pref=keys[_r].slice(0,ci+1).join('\u0001'); var _e=_r+1; while(_e<keys.length&&keys[_e].slice(0,ci+1).join('\u0001')===pref)_e++; span[_r][ci]=_e-_r; for(var _q=_r+1;_q<_e;_q++)span[_q][ci]=0; _r=_e; } } var baseRow=aoa.length; seg.forEach(function(rk,ri){ var kk=rmap[rk].k; var r=[]; for(var ci=0;ci<nf;ci++){ if(span[ri][ci]>0){ r.push(kk[ci]); if(span[ri][ci]>1)merges.push({s:{r:baseRow+ri,c:ci},e:{r:baseRow+ri+span[ri][ci]-1,c:ci}}); } else { r.push(''); } } blocks.forEach(function(b){ b.cells[rk].forEach(function(v){r.push(v);}); r.push(b.rowTot[rk]); }); aoa.push(r); }); subPos.forEach(function(p){seg.forEach(function(rk){acc[p].push(rk);});}); var nextK=(si+1<segs.length)?rmap[segs[si+1][0]].k:null, curK=rmap[seg[0]].k; subPos.slice().sort(function(a,b){return b-a;}).forEach(function(p){ var closing=!nextK||nextK.slice(0,p+1).join('')!==curK.slice(0,p+1).join(''); if(closing){ aoa.push(subRow(p,acc[p])); acc[p]=[]; } }); });
   var gr=[]; for(var i=0;i<nf;i++)gr.push(i===0?'총합계':''); blocks.forEach(function(b){ b.colTot.forEach(function(v){gr.push(v);}); gr.push(b.grand); }); aoa.push(gr);
-  var ws=XLSX.utils.aoa_to_sheet(aoa); ws['!merges']=merges;
-  var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'피벗');
-  XLSX.writeFile(wb,'피벗요약_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx');
+  var _mx=0; aoa.forEach(function(r){ if(r&&r.length>_mx)_mx=r.length; });
+  var _cols=[]; for(var _i=0;_i<_mx;_i++)_cols.push(_i<nf?18:13);
+  exportAOAStyled(aoa,merges,{cols:_cols,headerRows:2,name:'피벗',
+    file:'피벗요약_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx'});
 }
 function renderSummaryTab(){
   var el=document.getElementById('summaryTabBody');
@@ -2957,7 +2969,63 @@ function renderCalendarFilterBar(){
   el.innerHTML='<span style="color:#888">필터</span>'+sel('ch',0,'채널')+sel('item',1,'품목')+sel('pp',33,'PP')
     +'<button onclick="window._calFilters={ch:\'\',item:\'\',pp:\'\'};renderCalendarTab()" style="font-size:.64rem;padding:2px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer">해제</button>'
     +'<span style="margin-left:14px;color:#888">정렬</span><select onchange="calSetSort(this.value)" style="font-size:.68rem"><option value="channel"'+(sm==='channel'?' selected':'')+'>채널 그룹</option><option value="time"'+(sm==='time'?' selected':'')+'>시작시간 순(채널 무관)</option></select>'
-    +'<button onclick="openCalChOrder()" style="margin-left:10px;font-size:.66rem;padding:2px 9px;background:#eef6ff;border:1px solid #8ab;border-radius:5px;color:#0068b5;font-weight:600;cursor:pointer" title="캘린더 채널 표시 순서 변경(계정에 저장)">채널 순서</button>';
+    +'<button onclick="openCalChOrder()" class="pv-tbtn" style="margin-left:10px;font-size:.66rem;padding:2px 9px" title="캘린더 채널 표시 순서 변경(계정에 저장)">채널 순서</button>'
+    +'<button onclick="calendarExportExcel()" class="pv-tbtn" style="margin-left:auto;font-size:.66rem;padding:2px 9px" title="현재 필터가 적용된 캘린더를 엑셀로 내려받습니다">⬇ 엑셀 다운로드</button>';
+}
+function calendarExportExcel(){
+  if(typeof XLSX==='undefined'){alert('엑셀 모듈을 불러오지 못했습니다.');return;}
+  if(!_liveRows||_liveRows.length<2){alert('내보낼 데이터가 없습니다.');return;}
+  try{
+    var rows=filterLiveRowsByPV(_liveRows.slice(1));
+    if(typeof _calApplyFilters==='function')rows=_calApplyFilters(rows);
+    if(!rows.length){alert('현재 필터 조건에 해당하는 데이터가 없습니다.');return;}
+    var aoa=buildCalendarAOA(rows);
+    if(!aoa||!aoa.length){alert('캘린더 데이터를 만들지 못했습니다.');return;}
+    var maxc=0; aoa.forEach(function(r){ if(r&&r.length>maxc)maxc=r.length; });
+    var cols=[]; for(var i=0;i<maxc;i++)cols.push(i===0?14:26);
+    exportAOAStyled(aoa,[],{cols:cols,headerRows:1,name:'캘린더',
+      file:'캘린더_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx'});
+  }catch(e){ alert('엑셀 생성 실패: '+e.message); }
+}
+/* ── ExcelJS 기반 내보내기 (SheetJS 무료판은 셀 서식 쓰기 미지원) ──
+   aoa: 2차원 배열 / merges: [{s:{r,c},e:{r,c}}] / opts:{cols:[wch],headerRows:n,name,file} */
+function exportAOAStyled(aoa,merges,opts){
+  opts=opts||{};
+  if(typeof ExcelJS==='undefined'){ _exportAOAFallback(aoa,merges,opts); return; }
+  try{
+    var wb=new ExcelJS.Workbook();
+    var ws=wb.addWorksheet(opts.name||'Sheet1',{views:[{showGridLines:false}]});
+    aoa.forEach(function(r){ ws.addRow((r||[]).map(function(v){ return (v===undefined||v===null)?'':v; })); });
+    (merges||[]).forEach(function(m){
+      try{ ws.mergeCells(m.s.r+1,m.s.c+1,m.e.r+1,m.e.c+1); }catch(e){}
+    });
+    var maxc=0; aoa.forEach(function(r){ if(r&&r.length>maxc)maxc=r.length; });
+    for(var i=1;i<=maxc;i++){ ws.getColumn(i).width=(opts.cols&&opts.cols[i-1])?opts.cols[i-1]:16; }
+    var hr=opts.headerRows||0;
+    ws.eachRow(function(row,rn){
+      row.eachCell({includeEmpty:true},function(cell){
+        cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+        cell.border={top:{style:'thin',color:{argb:'FFBFBFBF'}},left:{style:'thin',color:{argb:'FFBFBFBF'}},
+                     bottom:{style:'thin',color:{argb:'FFBFBFBF'}},right:{style:'thin',color:{argb:'FFBFBFBF'}}};
+        if(rn<=hr){
+          cell.font={bold:true,color:{argb:'FFFFFFFF'},size:10};
+          cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF595959'}};
+        } else { cell.font={size:10}; }
+      });
+      row.height=opts.rowHeight||undefined;
+    });
+    wb.xlsx.writeBuffer().then(function(buf){
+      var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=opts.file||'export.xlsx';
+      document.body.appendChild(a); a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
+    }).catch(function(e){ alert('엑셀 생성 실패: '+e.message); });
+  }catch(e){ _exportAOAFallback(aoa,merges,opts); }
+}
+function _exportAOAFallback(aoa,merges,opts){
+  var ws=XLSX.utils.aoa_to_sheet(aoa); if(merges&&merges.length)ws['!merges']=merges;
+  if(opts.cols)ws['!cols']=opts.cols.map(function(w){return {wch:w};});
+  var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,opts.name||'Sheet1');
+  XLSX.writeFile(wb,opts.file||'export.xlsx');
 }
 function renderCalendarTab(){
   var el=document.getElementById('calendarTabBody');
@@ -3487,9 +3555,16 @@ function pvUndoProg(){
 }
 /* ── 되돌리기 / 다시실행 (Ctrl+Z / Ctrl+Y) : _liveRows 스냅샷 ── */
 var _pvUndoStack=[],_pvRedoStack=[];
-function _pvPushUndo(){ try{ if(_liveRows&&_liveRows.length){ _pvUndoStack.push(JSON.stringify(_liveRows)); if(_pvUndoStack.length>25)_pvUndoStack.shift(); _pvRedoStack=[]; } }catch(e){} window._pvDirty=true; if(typeof _pvUpdateUndoUI==='function')_pvUpdateUndoUI(); }
-function pvUndo(){ if(!_pvUndoStack.length)return; try{ _pvRedoStack.push(JSON.stringify(_liveRows)); _liveRows=JSON.parse(_pvUndoStack.pop()); window._pvDirty=true; renderLivePreview(); }catch(e){} }
-function pvRedo(){ if(!_pvRedoStack.length)return; try{ _pvUndoStack.push(JSON.stringify(_liveRows)); _liveRows=JSON.parse(_pvRedoStack.pop()); window._pvDirty=true; renderLivePreview(); }catch(e){} }
+/* 되돌리기 스냅샷: 데이터(_liveRows) + 열 설정(_colConfig)을 함께 저장 */
+function _pvSnap(){ return JSON.stringify({r:_liveRows||null,c:_colConfig||null}); }
+function _pvRestoreSnap(str){
+  var o=JSON.parse(str);
+  if(o&&Object.prototype.hasOwnProperty.call(o,'r')){ _liveRows=o.r; _colConfig=o.c; }
+  else { _liveRows=o; }  /* 구버전 스냅샷(배열) 호환 */
+}
+function _pvPushUndo(){ try{ _pvUndoStack.push(_pvSnap()); if(_pvUndoStack.length>25)_pvUndoStack.shift(); _pvRedoStack=[]; }catch(e){} window._pvDirty=true; if(typeof _pvUpdateUndoUI==='function')_pvUpdateUndoUI(); }
+function pvUndo(){ if(!_pvUndoStack.length)return; try{ _pvRedoStack.push(_pvSnap()); _pvRestoreSnap(_pvUndoStack.pop()); window._pvDirty=true; renderLivePreview(); }catch(e){console.warn('undo',e);} }
+function pvRedo(){ if(!_pvRedoStack.length)return; try{ _pvUndoStack.push(_pvSnap()); _pvRestoreSnap(_pvRedoStack.pop()); window._pvDirty=true; renderLivePreview(); }catch(e){console.warn('redo',e);} }
 function _pvUpdateUndoUI(){ var u=document.getElementById('pvUndoBtn'),r=document.getElementById('pvRedoBtn'); if(u){u.disabled=!_pvUndoStack.length;u.style.opacity=_pvUndoStack.length?'1':'.4';u.style.cursor=_pvUndoStack.length?'pointer':'default';} if(r){r.disabled=!_pvRedoStack.length;r.style.opacity=_pvRedoStack.length?'1':'.4';r.style.cursor=_pvRedoStack.length?'pointer':'default';} }
 window.addEventListener('beforeunload',function(e){ if(window._pvDirty&&_liveRows&&_liveRows.length>1){ e.preventDefault(); e.returnValue='저장하지 않은 데이터가 있습니다. 온보딩한 엑셀 데이터가 사라질 수 있으니 [JSON 파일 저장]으로 먼저 저장하세요.'; return e.returnValue; } });
 document.addEventListener('keydown',function(e){
@@ -4181,6 +4256,7 @@ var CCM_LEFT_GROUPS=[
 ];
 
 function openColConfig(){
+  try{ if(typeof _pvPushUndo==='function')_pvPushUndo(); }catch(e){}
   // Build or restore config
   if(!_colConfig)_colConfig=_defaultColConfig();
   _colConfig=_colConfig.filter(function(_i){return _HIDDEN_COLS.indexOf(_i)<0;});
@@ -8433,16 +8509,47 @@ function _fbUpdateUI(){
   var el=document.getElementById('fbAuthBar'); if(!el)return;
   if(window._fbUser){
     var nm=esc(_fbUser.displayName||_fbUser.email||'사용자');
-    var camp=window._fbCampName?esc(window._fbCampName):'캠페인 미선택';
+    var camp=window._fbCampName?(' · '+esc(window._fbCampName)):'';
     el.innerHTML=
-      '<button class="tbr-btn" onclick="openCampaignManager()" title="캠페인 생성 · 열기 · 삭제 (구글 계정 저장)" style="font-weight:700">📁 캠페인 관리<span id="fbTopSave" style="font-size:.62rem;margin-left:4px"></span></button>'
-      +'<button class="tbr-btn" onclick="openCampaignManager()" title="현재 편집 중인 캠페인" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">▣ '+camp+'</button>'
-      +'<button class="tbr-btn" onclick="openCampaignManager()" title="'+nm+' 계정으로 로그인됨">👤 '+nm+'</button>'
+      '<button class="tbr-btn" onclick="openCampaignManager()" title="캠페인 생성 · 복제 · 열기 · 삭제 (구글 계정 저장)" style="font-weight:700">📁 캠페인 관리<span id="fbTopSave" style="font-size:.62rem;margin-left:5px"></span></button>'
+      +'<span style="font-size:.66rem;color:rgba(255,255,255,.75);white-space:nowrap;max-width:230px;overflow:hidden;text-overflow:ellipsis">'+nm+'님 환영합니다.'+camp+'</span>'
       +'<button class="tbr-btn" onclick="fbLogout()" title="로그아웃">로그아웃</button>';
     try{_fbRefreshSaveLabel();}catch(e){}
   } else {
     el.innerHTML='<button class="tbr-btn" onclick="fbLogin()" style="font-weight:700">🔑 Google 로그인</button>';
   }
+}
+/* 캠페인 단위로 기억할 화면 상태: 대시보드 필터 + 열 설정 + 정렬 + 캘린더 필터 */
+function _fbCollectViewState(){
+  try{
+    var cf={}; if(window._pvColFilters){ for(var k in window._pvColFilters){ var v=window._pvColFilters[k]; cf[k]=(v&&v.forEach)?Array.from(v):v; } }
+    return {
+      colFilters:cf,
+      sortKeys:(window._pvSortKeys||[]).slice(),
+      colConfig:(typeof _colConfig!=='undefined'&&_colConfig)?_colConfig.slice():null,
+      selBcast:(typeof _pvSelectedBcast!=='undefined')?_pvSelectedBcast:'',
+      selCh:(typeof _pvSelectedCh!=='undefined')?_pvSelectedCh:'',
+      selPP:(typeof _pvSelectedPP!=='undefined')?_pvSelectedPP:'',
+      selItem:(typeof _pvSelectedItem!=='undefined')?_pvSelectedItem:'',
+      calFilters:window._calFilters||null,
+      calSortMode:window._calSortMode||null
+    };
+  }catch(e){ return null; }
+}
+function _fbApplyViewState(vs){
+  try{
+    if(!vs){ /* 저장된 상태가 없으면 초기화 */ window._pvColFilters={}; window._pvSortKeys=[]; return; }
+    var cf={}; if(vs.colFilters){ for(var k in vs.colFilters){ cf[k]=new Set(vs.colFilters[k]||[]); } }
+    window._pvColFilters=cf;
+    window._pvSortKeys=(vs.sortKeys||[]).slice();
+    if(Array.isArray(vs.colConfig))_colConfig=vs.colConfig.slice();
+    if(typeof _pvSelectedBcast!=='undefined')_pvSelectedBcast=vs.selBcast||'';
+    if(typeof _pvSelectedCh!=='undefined')_pvSelectedCh=vs.selCh||'';
+    if(typeof _pvSelectedPP!=='undefined')_pvSelectedPP=vs.selPP||'';
+    if(typeof _pvSelectedItem!=='undefined')_pvSelectedItem=vs.selItem||'';
+    window._calFilters=vs.calFilters||{ch:'',item:'',pp:''};
+    if(vs.calSortMode)window._calSortMode=vs.calSortMode;
+  }catch(e){ console.warn('applyViewState',e); }
 }
 function _fbUserDoc(){ return _fbDb.collection('users').doc(_fbUser.uid); }
 function _fbCampCol(){ return _fbUserDoc().collection('campaigns'); }
@@ -8457,15 +8564,15 @@ function _fbOnLogin(){
 /* ═══ 캠페인 관리 (구글 계정 기반, 실시간 자동 저장) ═══ */
 window._fbLastSave=0; window._fbSaving=false;
 function _fbAgoText(){
-  if(!window._fbCurrentCampaign)return '';
+  if(!window._fbCurrentCampaign)return '캠페인을 선택하세요';
   if(window._fbSaving)return '저장 중…';
-  if(window._pvDirty)return '저장되지 않은 변경 있음';
+  if(window._pvDirty)return '⚠ 저장되지 않은 변경 있음 — [☁ 저장]을 누르세요';
   if(!window._fbLastSave)return '';
   var sec=Math.floor((Date.now()-window._fbLastSave)/1000);
-  if(sec<60)return sec+'초 전 자동 저장 완료';
+  if(sec<60)return sec+'초 전 저장 완료';
   var min=Math.floor(sec/60);
-  if(min<60)return min+'분 전 자동 저장 완료';
-  return Math.floor(min/60)+'시간 전 자동 저장 완료';
+  if(min<60)return min+'분 전 저장 완료';
+  return Math.floor(min/60)+'시간 전 저장 완료';
 }
 function _fbRefreshSaveLabel(){
   var el=document.getElementById('fbSaveStatus'); if(el){ el.textContent=_fbAgoText(); el.style.color=window._pvDirty?'#c0392b':'#7a7a7a'; }
@@ -8493,9 +8600,9 @@ function openCampaignManager(){
   var pop=document.createElement('div'); pop.id='fbCampPop';
   pop.style.cssText='position:fixed;top:64px;right:18px;z-index:10001;background:#fff;border:1px solid #c8c8c8;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.28);padding:15px;width:380px;max-height:82vh;overflow:auto;font-size:.75rem;color:#222;font-family:"Noto Sans KR",sans-serif';
   pop.innerHTML='<div style="font-weight:800;font-size:.86rem;margin-bottom:3px">📁 캠페인 관리<span style="float:right;cursor:pointer;color:#aaa;font-weight:400" onclick="document.getElementById(\'fbCampPop\').remove()">✕</span></div>'
-    +'<div style="font-size:.65rem;color:#888;margin-bottom:10px">캠페인 1개 = 기존 JSON 파일 1개. 구글 계정에 실시간 저장됩니다.</div>'
+    +'<div style="font-size:.65rem;color:#888;margin-bottom:10px">캠페인 1개 = 기존 JSON 파일 1개. <b>저장 버튼을 눌러야</b> 클라우드에 기록됩니다.</div>'
     +'<div style="display:flex;align-items:center;gap:8px;background:#f5f8fb;border:1px solid #e0e6ec;border-radius:8px;padding:7px 10px;margin-bottom:10px">'
-      +'<button onclick="fbSaveCampaign()" style="padding:5px 12px;border:none;border-radius:6px;background:#1d7a46;color:#fff;font-weight:700;cursor:pointer;font-size:.7rem">☁ 지금 저장</button>'
+      +'<button onclick="fbSaveCampaign()" style="padding:5px 13px;border:none;border-radius:6px;background:#1d7a46;color:#fff;font-weight:700;cursor:pointer;font-size:.7rem">☁ 저장</button>'
       +'<span id="fbSaveStatus" style="font-size:.66rem;color:#7a7a7a"></span></div>'
     +'<div style="display:flex;gap:6px;margin-bottom:10px"><input id="fbNewCamp" placeholder="새 캠페인 이름" onkeydown="if(event.key===\'Enter\')fbCreateCampaign()" style="flex:1;padding:6px 9px;border:1px solid #ccc;border-radius:6px;font-size:.72rem"><button onclick="fbCreateCampaign()" style="padding:6px 13px;border:none;border-radius:6px;background:#0068b5;color:#fff;font-weight:700;cursor:pointer;font-size:.7rem">＋ 생성</button></div>'
     +'<div id="fbCampList" style="border-top:1px solid #eee;padding-top:8px;color:#999">불러오는 중…</div>';
@@ -8513,6 +8620,7 @@ function _fbRenderCampList(){
         +'<div style="flex:1;min-width:0"><b style="font-size:.75rem">'+esc(d.name||doc.id)+'</b>'+(cur?' <span style="color:#0068b5;font-size:.6rem;font-weight:700">● 편집 중</span>':'')
         +'<br><span style="color:#aaa;font-size:.6rem">'+(d.updatedAt?new Date(d.updatedAt).toLocaleString():'')+(d.rowCount?(' · '+d.rowCount+'행'):'')+'</span></div>'
         +(cur?'':'<button onclick="fbLoadCampaign(\''+doc.id+'\')" style="font-size:.64rem;padding:4px 9px;border:1px solid #8ab;border-radius:5px;background:#eef6ff;color:#0068b5;cursor:pointer;font-weight:700">열기</button>')
+        +'<button onclick="fbDuplicateCampaign(\''+doc.id+'\')" title="이 캠페인을 복제합니다" style="font-size:.64rem;padding:4px 8px;border:1px solid #bbb;border-radius:5px;background:#fff;color:#555;cursor:pointer">복제</button>'
         +'<button onclick="fbDeleteCampaign(\''+doc.id+'\',\''+esc((d.name||'').replace(/\'/g,''))+'\')" style="font-size:.64rem;padding:4px 8px;border:1px solid #e6c0c0;border-radius:5px;background:#fff;color:#c0392b;cursor:pointer">삭제</button>'
         +'</div>';
     });
@@ -8523,7 +8631,7 @@ function fbCreateCampaign(){
   var inp=document.getElementById('fbNewCamp'); var nm=((inp&&inp.value)||'').trim();
   if(!nm){alert('캠페인 이름을 입력하세요.');return;}
   /* 빈 캠페인만 만들고, 현재 편집 중인 캠페인은 그대로 둔다(자동 이동 없음) */
-  _fbCampCol().add({name:nm,liveRows:'[]',rowCount:0,updatedAt:Date.now()}).then(function(ref){
+  _fbCampCol().add({name:nm,liveRows:'[]',rowCount:0,viewState:null,updatedAt:Date.now()}).then(function(ref){
     if(inp)inp.value='';
     _fbRenderCampList();
     showSaveToast&&showSaveToast('빈 캠페인 생성: '+nm+' (목록에서 [열기]를 눌러 이동)');
@@ -8537,6 +8645,7 @@ function _fbDoLoad(id){
     try{ var rows=JSON.parse(dd.liveRows||'[]'); window._liveRows=rows; if(typeof _liveRows!=='undefined')_liveRows=rows;
       window._fbCurrentCampaign=id; window._fbCampName=dd.name||id; window._pvDirty=false; window._fbLastSave=Date.now();
       try{ window._pvUndoStack=[]; window._pvRedoStack=[]; }catch(e){}
+      _fbApplyViewState(dd.viewState||null);   /* 캠페인별 필터·열 설정 복원 */
       if(typeof renderLivePreview==='function')renderLivePreview();
       if(typeof updatePreviewFilters==='function')updatePreviewFilters();
       if(typeof renderCalendarTab==='function')renderCalendarTab();
@@ -8554,11 +8663,24 @@ function fbSaveCampaign(done){
   var data=JSON.stringify(rows);
   if(data.length>1000000){ alert('데이터가 1MB를 초과해 클라우드에 저장할 수 없습니다. 캠페인을 나눠 주세요.'); done&&done(false); return; }
   window._fbSaving=true; _fbRefreshSaveLabel();
-  _fbCampCol().doc(window._fbCurrentCampaign).set({liveRows:data,rowCount:Math.max(0,rows.length-1),updatedAt:Date.now()},{merge:true}).then(function(){
+  _fbCampCol().doc(window._fbCurrentCampaign).set({liveRows:data,rowCount:Math.max(0,rows.length-1),viewState:_fbCollectViewState(),updatedAt:Date.now()},{merge:true}).then(function(){
     window._pvDirty=false; window._fbSaving=false; window._fbLastSave=Date.now();
     _fbRefreshSaveLabel(); if(document.getElementById('fbCampList'))_fbRenderCampList();
     done&&done(true);
   }).catch(function(e){ window._fbSaving=false; _fbRefreshSaveLabel(); alert('저장 실패: '+e.message); done&&done(false); });
+}
+function fbDuplicateCampaign(id){
+  _fbCampCol().doc(id).get().then(function(d){
+    if(!d.exists){alert('없는 캠페인입니다.');return;}
+    var dd=d.data();
+    var base=(dd.name||'캠페인')+' 복사본';
+    var nm=prompt('복제할 캠페인 이름을 입력하세요.',base);
+    if(nm===null)return; nm=String(nm).trim(); if(!nm){alert('이름을 입력하세요.');return;}
+    _fbCampCol().add({name:nm,liveRows:dd.liveRows||'[]',rowCount:dd.rowCount||0,
+      viewState:dd.viewState||null,updatedAt:Date.now()}).then(function(){
+      _fbRenderCampList(); showSaveToast&&showSaveToast('복제 완료: '+nm);
+    }).catch(function(e){alert('복제 실패: '+e.message);});
+  }).catch(function(e){alert('복제 실패: '+e.message);});
 }
 function fbDeleteCampaign(id,nm){
   if(!confirm('캠페인 "'+nm+'"을(를) 삭제할까요? 되돌릴 수 없습니다.'))return;
@@ -8567,11 +8689,6 @@ function fbDeleteCampaign(id,nm){
     _fbRenderCampList();
   }).catch(function(e){alert('삭제 실패: '+e.message);});
 }
-/* 실시간 자동 저장: 변경 후 5초 동안 조용하면 저장(구글 드라이브 방식) */
-setInterval(function(){ try{
-  if(window._fbUser&&window._fbCurrentCampaign&&window._pvDirty&&!window._fbSaving){
-    if(Date.now()-(window._fbLastSave||0)>4000) fbSaveCampaign();
-  }
-}catch(e){} },5000);
+/* 자동 저장 없음 — [☁ 저장] 버튼을 눌렀을 때만 클라우드에 기록됩니다. */
 /* 로그아웃/새로고침 전 미저장 경고는 기존 beforeunload가 처리 */
 </script>

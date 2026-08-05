@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>큐메이트</title>
+<title>Q-Mate - 방송사 큐시트 관리 사이트</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
@@ -401,14 +401,16 @@ tr.pv-highlight-on td{background:rgba(251,191,36,.18)!important}
 /* ═══ App Shell ═══ */
 .app-shell{display:flex;flex-direction:column;height:100vh;background:var(--bg);width:100%;overflow:hidden;}
 .app-topbar{display:flex;align-items:center;gap:0;background:#fff;border-bottom:2px solid var(--border);padding:0 16px;height:48px;flex-shrink:0;position:sticky;top:0;z-index:200;width:100%;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.app-brand{display:flex;align-items:baseline;gap:8px;margin-right:24px;cursor:pointer}
-.brand-name{font-size:.86rem;font-weight:700;color:#1a1a2e;white-space:nowrap}
+.app-brand{display:flex;align-items:center;margin-right:26px;cursor:default;user-select:none}
+.brand-name{font-size:1.28rem;font-weight:900;color:#111;white-space:nowrap;letter-spacing:-.4px;font-family:"Space Mono",monospace}
 .brand-ver{font-family:'Space Mono',monospace;font-size:.57rem;color:var(--accent2);letter-spacing:.5px}
 .app-tabs{display:flex;align-items:stretch;height:100%;flex:1}
 .tab-btn{background:none;border:none;border-bottom:2px solid transparent;color:#666;font-size:.78rem;font-family:'Noto Sans KR',sans-serif;padding:0 16px;cursor:pointer;transition:all .15s;white-space:nowrap;font-weight:500}
 .tab-btn:hover{color:#111;background:#f0f0f3}
 .tab-btn.active{color:#1a1a2e;border-bottom-color:var(--accent);font-weight:700}
-.app-topbar-right{display:flex;align-items:center;gap:7px;margin-left:auto}
+.app-topbar-right{display:flex;align-items:center;gap:6px;margin-left:auto}
+.app-topbar-right>*{flex-shrink:0}
+.tbr-sep{width:1px;height:18px;background:var(--border);margin:0 3px}
 .pv-tbtn{font-size:.68rem;padding:3px 10px;background:#fff;border:1px solid #bbb;border-radius:5px;color:#444;font-weight:600;cursor:pointer;font-family:"Noto Sans KR",sans-serif;transition:all .12s}
 .pv-tbtn:hover:not(:disabled){background:#f2f2f4;border-color:#888;color:#111}
 .pv-tbtn:disabled{opacity:.45;cursor:default}
@@ -496,12 +498,6 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
       <span class="setup-cfg-arrow">›</span>
     </button>
 
-    <!-- Startup choice -->
-    <div id="startupChoice" style="display:flex;gap:14px;justify-content:center;margin-bottom:18px">
-      
-      <button onclick="confirmSetup()" style="padding:10px 28px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:.88rem;font-weight:700;cursor:pointer;font-family:inherit">추가하기</button>
-    </div>
-
     <!-- File upload -->
     <div class="dropzone" id="dropzone" style="padding:28px 20px">
       <div class="drop-icon">📊</div>
@@ -520,9 +516,9 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
 
 
 
-    <div class="setup-footer">
+    <div class="setup-footer" style="display:flex;align-items:center;gap:10px">
       <button class="setup-refresh-btn" onclick="clearAllFiles()">새로고침</button>
-
+      <button id="startupChoice" onclick="confirmSetup()" style="margin-left:auto;padding:10px 30px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:.88rem;font-weight:700;cursor:pointer;font-family:inherit">추가하기</button>
     </div>
 
     
@@ -535,9 +531,8 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
 
   <!-- Top bar -->
   <div class="app-topbar">
-    <div class="app-brand" onclick="backToSetup()" title="파일 재선택">
-      <span class="brand-name">큐메이트</span>
-      <span class="brand-ver"></span>
+    <div class="app-brand">
+      <span class="brand-name">Q-Mate</span>
     </div>
     <div class="app-tabs">
       <button class="tab-btn active" data-tab="filter" onclick="switchMainTab('filter')">대시보드</button>
@@ -550,12 +545,13 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
     </div>
     <div class="app-topbar-right">
       <button class="tbr-btn" onclick="addMoreOnboarding()" title="방송사 엑셀 큐시트를 팝업에서 추가 온보딩">큐시트 추가</button>
-      <button id="mergeBtn" disabled onclick="confirmAndMerge()">
+      <button id="mergeBtn" class="tbr-btn" disabled onclick="confirmAndMerge()">
         <div class="spinner" style="display:none;width:14px;height:14px;border-width:2px;margin-right:4px"></div>
         <span class="btn-label">엑셀 다운로드</span>
       </button>
-      <span style="font-size:.58rem;color:rgba(255,255,255,.35);font-family:'Space Mono',monospace;white-space:nowrap;line-height:1.3;text-align:right;margin-left:2px">v3.3 Beta<br>2026-07-27</span>
-      <div id="fbAuthBar" style="display:flex;align-items:center;gap:6px;margin-left:6px"></div>
+      <span class="tbr-sep"></span>
+      <div id="fbAuthBar" style="display:flex;align-items:center;gap:6px"></div>
+      <span class="tbr-sep"></span>
       <button class="tbr-btn" onclick="openSettings(null);_initCprpOnSettingsOpen()" title="세부 설정" style="font-size:1.05rem;line-height:1;padding:4px 9px">⚙</button>
     </div>
   </div>
@@ -2973,20 +2969,63 @@ function renderCalendarFilterBar(){
     +'<button onclick="calendarExportExcel()" class="pv-tbtn" style="margin-left:auto;font-size:.66rem;padding:2px 9px" title="현재 필터가 적용된 캘린더를 엑셀로 내려받습니다">⬇ 엑셀 다운로드</button>';
 }
 function calendarExportExcel(){
-  if(typeof XLSX==='undefined'){alert('엑셀 모듈을 불러오지 못했습니다.');return;}
   if(!_liveRows||_liveRows.length<2){alert('내보낼 데이터가 없습니다.');return;}
   try{
-    var rows=filterLiveRowsByPV(_liveRows.slice(1));
-    if(typeof _calApplyFilters==='function')rows=_calApplyFilters(rows);
-    if(!rows.length){alert('현재 필터 조건에 해당하는 데이터가 없습니다.');return;}
-    var aoa=buildCalendarAOA(rows);
-    if(!aoa||!aoa.length){alert('캘린더 데이터를 만들지 못했습니다.');return;}
+    var body=filterLiveRowsByPV(_liveRows.slice(1));
+    if(typeof _calApplyFilters==='function')body=_calApplyFilters(body);
+    if(!body.length){alert('현재 필터 조건에 해당하는 데이터가 없습니다.');return;}
+    /* computeCalendarGrid는 헤더가 포함된 배열을 기대한다 */
+    var res=buildCalendarAOA([_liveRows[0]].concat(body));
+    var aoa=res&&res.aoa, merges=(res&&res.merges)||[];
+    if(!aoa||!aoa.length||(aoa.length===1&&aoa[0][0]==='데이터 없음')){alert('해당 기간에 표시할 캘린더 데이터가 없습니다.');return;}
     var maxc=0; aoa.forEach(function(r){ if(r&&r.length>maxc)maxc=r.length; });
-    var cols=[]; for(var i=0;i<maxc;i++)cols.push(i===0?14:26);
-    exportAOAStyled(aoa,[],{cols:cols,headerRows:1,name:'캘린더',
+    var cols=[]; for(var i=0;i<maxc;i++){ var k=i%5; cols.push(k===0?11:k===1?7:k===2?5:k===3?26:8); }
+    exportAOAStyled(aoa,merges,{cols:cols,headerRows:1,name:'캘린더',dateRowMerges:true,
       file:'캘린더_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx'});
   }catch(e){ alert('엑셀 생성 실패: '+e.message); }
 }
+
+/* ── 편성표 → 엑셀 (화면 표를 그대로 AOA+병합으로 변환) ── */
+function analysisExportExcel(){
+  var tbl=document.querySelector('#analysisPopupBody table');
+  if(!tbl){alert('편성표가 아직 표시되지 않았습니다. 편성표 탭에서 조건을 선택한 뒤 다시 시도해 주세요.');return;}
+  try{
+    var conv=_tableToAOA(tbl);
+    if(!conv.aoa.length){alert('내보낼 내용이 없습니다.');return;}
+    var maxc=0; conv.aoa.forEach(function(r){ if(r&&r.length>maxc)maxc=r.length; });
+    var cols=[]; for(var i=0;i<maxc;i++)cols.push(i<3?18:9);
+    exportAOAStyled(conv.aoa,conv.merges,{cols:cols,headerRows:conv.headerRows,name:'편성표',
+      file:'편성표_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx'});
+  }catch(e){ alert('엑셀 생성 실패: '+e.message); }
+}
+/* HTML table → {aoa, merges, headerRows} (rowspan/colspan 반영) */
+function _tableToAOA(tbl){
+  var rows=tbl.rows, aoa=[], merges=[], occupied={}, headerRows=0;
+  for(var r=0;r<rows.length;r++){
+    var cells=rows[r].cells, c=0, out=aoa[r]||(aoa[r]=[]);
+    var isHdr=true;
+    for(var i=0;i<cells.length;i++){
+      while(occupied[r+'_'+c])c++;
+      var cell=cells[i];
+      if(cell.tagName!=='TH')isHdr=false;
+      var rs=cell.rowSpan||1, cs=cell.colSpan||1;
+      var txt=(cell.innerText||cell.textContent||'').replace(/\s+/g,' ').trim();
+      var num=(txt!==''&&/^-?[\d,]+(\.\d+)?$/.test(txt))?Number(txt.replace(/,/g,'')):null;
+      out[c]=(num!==null&&isFinite(num))?num:txt;
+      if(rs>1||cs>1)merges.push({s:{r:r,c:c},e:{r:r+rs-1,c:c+cs-1}});
+      for(var dr=0;dr<rs;dr++)for(var dc=0;dc<cs;dc++){
+        occupied[(r+dr)+'_'+(c+dc)]=true;
+        if(!aoa[r+dr])aoa[r+dr]=[];
+        if(!(dr===0&&dc===0))aoa[r+dr][c+dc]='';
+      }
+      c+=cs;
+    }
+    if(isHdr&&cells.length&&headerRows===r)headerRows=r+1;
+  }
+  aoa.forEach(function(row,i){ for(var j=0;j<row.length;j++) if(row[j]===undefined)row[j]=''; });
+  return {aoa:aoa,merges:merges,headerRows:headerRows||1};
+}
+
 /* ── ExcelJS 기반 내보내기 (SheetJS 무료판은 셀 서식 쓰기 미지원) ──
    aoa: 2차원 배열 / merges: [{s:{r,c},e:{r,c}}] / opts:{cols:[wch],headerRows:n,name,file} */
 function exportAOAStyled(aoa,merges,opts){
@@ -2996,24 +3035,30 @@ function exportAOAStyled(aoa,merges,opts){
     var wb=new ExcelJS.Workbook();
     var ws=wb.addWorksheet(opts.name||'Sheet1',{views:[{showGridLines:false}]});
     aoa.forEach(function(r){ ws.addRow((r||[]).map(function(v){ return (v===undefined||v===null)?'':v; })); });
+    var mset={};
     (merges||[]).forEach(function(m){
-      try{ ws.mergeCells(m.s.r+1,m.s.c+1,m.e.r+1,m.e.c+1); }catch(e){}
+      try{ ws.mergeCells(m.s.r+1,m.s.c+1,m.e.r+1,m.e.c+1); mset[(m.s.r+1)+'_'+(m.s.c+1)]=true; }catch(e){}
     });
     var maxc=0; aoa.forEach(function(r){ if(r&&r.length>maxc)maxc=r.length; });
     for(var i=1;i<=maxc;i++){ ws.getColumn(i).width=(opts.cols&&opts.cols[i-1])?opts.cols[i-1]:16; }
     var hr=opts.headerRows||0;
-    ws.eachRow(function(row,rn){
-      row.eachCell({includeEmpty:true},function(cell){
+    var thin={style:'thin',color:{argb:'FFD0D0D0'}};
+    ws.eachRow({includeEmpty:true},function(row,rn){
+      for(var ci=1;ci<=maxc;ci++){
+        var cell=row.getCell(ci);
         cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
-        cell.border={top:{style:'thin',color:{argb:'FFBFBFBF'}},left:{style:'thin',color:{argb:'FFBFBFBF'}},
-                     bottom:{style:'thin',color:{argb:'FFBFBFBF'}},right:{style:'thin',color:{argb:'FFBFBFBF'}}};
+        cell.border={top:thin,left:thin,bottom:thin,right:thin};
         if(rn<=hr){
-          cell.font={bold:true,color:{argb:'FFFFFFFF'},size:10};
+          cell.font={bold:true,color:{argb:'FFFFFFFF'},size:10,name:'맑은 고딕'};
           cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF595959'}};
-        } else { cell.font={size:10}; }
-      });
-      row.height=opts.rowHeight||undefined;
+        } else {
+          cell.font={size:10,name:'맑은 고딕'};
+          if(opts.zebra&&rn%2===0)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF7F7F9'}};
+        }
+      }
+      row.height=opts.rowHeight||18;
     });
+    ws.views=[{showGridLines:false,state:hr?'frozen':'normal',ySplit:hr||0}];
     wb.xlsx.writeBuffer().then(function(buf){
       var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
       var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=opts.file||'export.xlsx';
@@ -6267,8 +6312,9 @@ function renderAnalysisPage(){
   if(bar&&!bar.querySelector('#anPageActs')){
     var acts=document.createElement('div'); acts.id='anPageActs';
     acts.style.cssText='display:flex;gap:6px;align-items:center;margin-left:auto';
-    acts.innerHTML='<button onclick="anSaveOrder()" style="font-size:.68rem;padding:3px 12px;background:#eafaf0;border:1px solid #7c7;border-radius:5px;color:#1d7a46;font-weight:700;cursor:pointer">순서 저장</button>'
-      +'<button onclick="anRevertOrder()" style="font-size:.68rem;padding:3px 10px;background:#fff;border:1px solid #aaa;border-radius:5px;color:#444;font-weight:600;cursor:pointer" title="저장된 순서로 되돌립니다">↺ 되돌리기</button>';
+    acts.innerHTML='<button onclick="anSaveOrder()" class="pv-tbtn">순서 저장</button>'
+      +'<button onclick="anRevertOrder()" class="pv-tbtn" title="저장된 순서로 되돌립니다">↺ 되돌리기</button>'
+      +'<button onclick="analysisExportExcel()" class="pv-tbtn" title="현재 편성표를 엑셀로 내려받습니다">⬇ 엑셀 다운로드</button>';
     bar.appendChild(acts);
   }
   if(fb&&fb.parentNode!==bar){ fb.style.margin='0'; fb.style.flex='1 1 auto'; bar.insertBefore(fb,bar.firstChild); }

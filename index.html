@@ -401,8 +401,8 @@ tr.pv-highlight-on td{background:rgba(251,191,36,.18)!important}
 /* ═══ App Shell ═══ */
 .app-shell{display:flex;flex-direction:column;height:100vh;background:var(--bg);width:100%;overflow:hidden;}
 .app-topbar{display:flex;align-items:center;gap:0;background:#fff;border-bottom:2px solid var(--border);padding:0 16px;height:48px;flex-shrink:0;position:sticky;top:0;z-index:200;width:100%;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.app-brand{display:flex;flex-direction:column;align-items:center;justify-content:center;margin-right:26px;cursor:default;user-select:none;gap:1px}
-.qm-logo{height:30px;width:auto;display:block}
+.app-brand{display:flex;flex-direction:column;align-items:center;justify-content:center;margin-right:26px;cursor:default;user-select:none;gap:0;padding:2px 0}
+.qm-logo{height:28px;width:auto;display:block;margin:3px 0 1px}
 .brand-tag{font-size:.45rem;letter-spacing:.005em;color:#8b8b95;white-space:nowrap;font-weight:600;line-height:1;text-align:center;margin-top:2px}
 .brand-name{font-size:1.28rem;font-weight:900;color:#111;white-space:nowrap;letter-spacing:-.4px;font-family:"Space Mono",monospace}
 .brand-ver{font-family:'Space Mono',monospace;font-size:.57rem;color:var(--accent2);letter-spacing:.5px}
@@ -2790,6 +2790,19 @@ function _pvDispVal(col,v){
   var s=String(v==null?'':v).trim();
   if(col===41)return (s==='1'||s==='본방')?'본방':(s===''?'':'비본방');
   if(col===34){ if(s==='')return ''; return /주차$/.test(s)?s:(s+'주차'); }
+  if(col===19||col===20||col===21)return _pvMD(s);   /* 시작일자·종료일자·집행일 → M/D */
+  return s;
+}
+/* 어떤 형태의 날짜든 M/D 로 */
+function _pvMD(s){
+  if(!s)return '';
+  s=String(s).trim();
+  var m=/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})/.exec(s);
+  if(m)return (+m[2])+'/'+(+m[3]);
+  m=/^(\d{1,2})[-.\/](\d{1,2})$/.exec(s);
+  if(m)return (+m[1])+'/'+(+m[2]);
+  m=/^(\d{4})(\d{2})(\d{2})$/.exec(s);
+  if(m)return (+m[2])+'/'+(+m[3]);
   return s;
 }
 function _pvNum(r,i){ return parseFloat(String(r[i]==null?'':r[i]).replace(/[^0-9.\-]/g,''))||0; }
@@ -2855,7 +2868,9 @@ function _pivotModel(){
       });
     });
     if(!leaves.length){ bc.vals.forEach(function(v){ var _l=_pvValLabel(v); leaves.push({label:_l,colLabel:_l,lvls:[_l],valLabel:_l,preds:[],v:v,num:_pvIsNumericVal(v),pct:_pvValIsPct(v),src:_pvValSrc(v)}); }); }
-    return {__i:__i,title:bc.fields.length?bc.fields.map(_pvTokLabel).join(', '):'값',fields:bc.fields.slice(),fieldless:!bc.fields.length,leaves:leaves};
+    var _vt={},_vn=[]; bc.vals.forEach(function(v){ var l=_pvValLabel(v); if(!_vt[l]){_vt[l]=1;_vn.push(l);} });
+    return {__i:__i,title:bc.fields.length?bc.fields.map(_pvTokLabel).join(', '):(_vn.join(', ')||'값'),
+            fields:bc.fields.slice(),fieldless:!bc.fields.length,leaves:leaves};
   });
   blocks.forEach(function(b){
     b.cells={}; b.rowTot={}; b.rowTotByType={}; b.colTot=b.leaves.map(function(){return 0;}); b.grand=0; b.grandByType={};
@@ -2909,15 +2924,18 @@ function _pivotTableHTML(){
   cfg.rows.forEach(function(i){ t+='<th rowspan="'+hdrRows+'" style="'+hs+';position:sticky;top:0">'+esc(OUT_COLS[i])+'</th>'; });
   blocks.forEach(function(b){ t+='<th colspan="'+(b.leaves.length+(b.showTotal?1:0))+'" style="'+hs+'">'+esc(b.title)+'</th>'; });
   t+='</tr>';
+  blocks.forEach(function(b){ b.lvN=0; b.leaves.forEach(function(lf){ var n=(lf.lvls||[]).length; if(n>b.lvN)b.lvN=n; }); });
   for(var lv=0;lv<maxLv;lv++){
     t+='<tr>';
     blocks.forEach(function(b){
+      if(lv>=b.lvN)return;                    /* 이 블록은 이미 아래까지 병합됨 */
+      var span=(lv===b.lvN-1)?(maxLv-b.lvN+1):1;   /* 마지막 레벨은 남은 줄까지 세로 병합 */
       var i=0;
       while(i<b.leaves.length){
         var pref=(b.leaves[i].lvls||[]).slice(0,lv+1).join('\u0001'), n=0;
         while(i+n<b.leaves.length&&((b.leaves[i+n].lvls||[]).slice(0,lv+1).join('\u0001'))===pref)n++;
         var lab=(b.leaves[i].lvls||[])[lv];
-        t+='<th colspan="'+n+'" style="'+hs+(lv===maxLv-1?';font-weight:500':'')+'">'+esc(lab==null?'　':lab)+'</th>';
+        t+='<th colspan="'+n+'"'+(span>1?' rowspan="'+span+'"':'')+' style="'+hs+(lv===b.lvN-1?';font-weight:500':'')+'">'+esc(lab==null?'　':lab)+'</th>';
         i+=n;
       }
       if(b.showTotal&&lv===0)t+='<th rowspan="'+Math.max(1,maxLv)+'" style="'+hs+'">합계</th>';
@@ -3164,7 +3182,8 @@ function _pvRenderTplPop(){
       +'<div style="flex:1;min-width:0"><b style="font-size:.74rem">'+esc(t.name)+'</b>'+(isCur?' <span style="color:#0068b5;font-size:.6rem;font-weight:700">● 적용 중</span>':'')
       +'<br><span style="color:#aaa;font-size:.6rem">행 '+nr+'개 · 블록 '+nb+'개</span></div>'
       +(isCur?'<button onclick="pvTplOverwrite(\''+esc(t.name).replace(/'/g,'')+'\')" style="font-size:.63rem;padding:4px 9px;border:1px solid #bbb;border-radius:5px;background:#fff;color:#555;cursor:pointer">덮어쓰기</button>'
-             :'<button onclick="pvTplApply(\''+esc(t.name).replace(/'/g,'')+'\')" style="font-size:.63rem;padding:4px 10px;border:1px solid #8ab;border-radius:5px;background:#eef6ff;color:#0068b5;cursor:pointer;font-weight:700">적용</button>')
+             :'<button onclick="pvTplApply(\''+esc(t.name).replace(/'/g,'')+'\')" style="font-size:.63rem;padding:4px 10px;border:1px solid #8ab;border-radius:5px;background:#eef6ff;color:#0068b5;cursor:pointer;font-weight:700">불러오기</button>')
+      +'<button onclick="pvTplRename(\''+esc(t.name).replace(/'/g,'')+'\')" title="이름 수정" style="font-size:.63rem;padding:4px 8px;border:1px solid #bbb;border-radius:5px;background:#fff;color:#555;cursor:pointer">이름</button>'
       +'<button onclick="pvTplDelete(\''+esc(t.name).replace(/'/g,'')+'\')" style="font-size:.63rem;padding:4px 8px;border:1px solid #e6c0c0;border-radius:5px;background:#fff;color:#c0392b;cursor:pointer">삭제</button></div>';
   });
   pop.innerHTML=h+'</div>';
@@ -3191,6 +3210,15 @@ function pvTplOverwrite(nm){ if(!confirm('"'+nm+'" 템플릿을 현재 구성으
   _pvRenderTplPop(); showSaveToast&&showSaveToast('템플릿 저장: '+nm); }
 function pvTplApply(nm){ var t=(window._pivotTemplates||[]).filter(function(x){return x.name===nm;})[0]; if(!t)return;
   window._pivotCfg=JSON.parse(JSON.stringify(t.cfg)); window._pvTplSelected=nm; _pivotCfgInit(); renderSummaryTab(); _pvRenderTplPop(); }
+function pvTplRename(nm){
+  var t=(window._pivotTemplates||[]).filter(function(x){return x.name===nm;})[0]; if(!t)return;
+  var nn=prompt('템플릿 이름을 수정하세요.',nm); if(nn===null)return; nn=String(nn).trim();
+  if(!nn){alert('이름을 입력하세요.');return;}
+  if(nn!==nm&&(window._pivotTemplates||[]).some(function(x){return x.name===nn;})){alert('같은 이름의 템플릿이 이미 있습니다.');return;}
+  t.name=nn; if(window._pvTplSelected===nm)window._pvTplSelected=nn;
+  if(typeof saveRulesToFile==='function'){try{saveRulesToFile(true);}catch(e){}}
+  _pvRenderTplPop(); renderSummaryTab();
+}
 function pvTplDelete(nm){ if(!confirm('템플릿 "'+nm+'"를 삭제할까요?'))return;
   window._pivotTemplates=(window._pivotTemplates||[]).filter(function(x){return x.name!==nm;});
   if(window._pvTplSelected===nm)window._pvTplSelected='';
@@ -3313,14 +3341,17 @@ function pivotExportExcel(){
     var w=b.leaves.length+(b.showTotal?1:0);
     hrows[0].push(b.title); for(var j=1;j<w;j++)hrows[0].push('');
     if(w>1)merges.push({s:{r:0,c:col},e:{r:0,c:col+w-1}});
+    var bLv=0; b.leaves.forEach(function(lf){ var n=(lf.lvls||[]).length; if(n>bLv)bLv=n; });
     for(var lv=0;lv<maxLv;lv++){
       var i=0,cc=col;
+      if(lv>=bLv){ for(var z=0;z<b.leaves.length+(b.showTotal?1:0);z++)hrows[lv+1].push(''); continue; }
+      var vsp=(lv===bLv-1)?(maxLv-bLv+1):1;
       while(i<b.leaves.length){
         var pref=(b.leaves[i].lvls||[]).slice(0,lv+1).join('\u0001'),n=0;
         while(i+n<b.leaves.length&&((b.leaves[i+n].lvls||[]).slice(0,lv+1).join('\u0001'))===pref)n++;
         var lab=(b.leaves[i].lvls||[])[lv];
         hrows[lv+1].push(lab==null?'':lab); for(var q=1;q<n;q++)hrows[lv+1].push('');
-        if(n>1)merges.push({s:{r:lv+1,c:cc},e:{r:lv+1,c:cc+n-1}});
+        if(n>1||vsp>1)merges.push({s:{r:lv+1,c:cc},e:{r:lv+vsp,c:cc+n-1}});
         cc+=n; i+=n;
       }
       if(b.showTotal){ hrows[lv+1].push(lv===0?'합계':''); }
@@ -8354,6 +8385,7 @@ function frApply(){
   var repl=(document.getElementById('frReplace')||{}).value||'';
   var whole=(document.getElementById('frWhole')||{}).checked;
   if(!find){ if(typeof showSaveToast==='function')showSaveToast('찾을 텍스트를 입력하세요.',true); return; }
+  if(typeof _pvPushUndo==='function')_pvPushUndo();   /* 되돌리기(Ctrl+Z) 지원 */
   var n=0;
   _frRows().forEach(function(r){
     var v=String(r[col]==null?'':r[col]);
@@ -9281,6 +9313,7 @@ function _fbRenderCampList(){
         +(cur?'<br><span id="fbSaveStatus" style="font-size:.62rem;color:#7a7a7a"></span>':'')+'</div>'
         +(cur?'<button onclick="fbSaveCampaign()" title="현재 편집 내용을 이 캠페인에 저장합니다" style="font-size:.64rem;padding:4px 10px;border:none;border-radius:5px;background:#1d7a46;color:#fff;cursor:pointer;font-weight:700">저장</button>'
              :'<button onclick="fbLoadCampaign(\''+doc.id+'\')" style="font-size:.64rem;padding:4px 9px;border:1px solid #8ab;border-radius:5px;background:#eef6ff;color:#0068b5;cursor:pointer;font-weight:700">열기</button>')
+        +'<button onclick="fbRenameCampaign(\''+doc.id+'\',\''+esc((d.name||'').replace(/\'/g,''))+'\')" title="이름 수정" style="font-size:.64rem;padding:4px 8px;border:1px solid #bbb;border-radius:5px;background:#fff;color:#555;cursor:pointer">이름</button>'
         +'<button onclick="fbDuplicateCampaign(\''+doc.id+'\')" title="이 캠페인을 복제합니다" style="font-size:.64rem;padding:4px 8px;border:1px solid #bbb;border-radius:5px;background:#fff;color:#555;cursor:pointer">복제</button>'
         +'<button onclick="fbDeleteCampaign(\''+doc.id+'\',\''+esc((d.name||'').replace(/\'/g,''))+'\')" style="font-size:.64rem;padding:4px 8px;border:1px solid #e6c0c0;border-radius:5px;background:#fff;color:#c0392b;cursor:pointer">삭제</button>'
         +'</div>';
@@ -9334,6 +9367,14 @@ function fbSaveCampaign(done){
     _fbRefreshSaveLabel(); if(document.getElementById('fbCampList'))_fbRenderCampList();
     done&&done(true);
   }).catch(function(e){ window._fbSaving=false; _fbRefreshSaveLabel(); alert('저장 실패: '+e.message); done&&done(false); });
+}
+function fbRenameCampaign(id,cur){
+  var nn=prompt('캠페인 이름을 수정하세요.',cur||''); if(nn===null)return; nn=String(nn).trim();
+  if(!nn){alert('이름을 입력하세요.');return;}
+  _fbCampCol().doc(id).set({name:nn,updatedAt:Date.now()},{merge:true}).then(function(){
+    if(window._fbCurrentCampaign===id){ window._fbCampName=nn; _fbUpdateUI(); }
+    _fbRenderCampList(); showSaveToast&&showSaveToast('이름 변경: '+nn);
+  }).catch(function(e){alert('이름 변경 실패: '+e.message);});
 }
 function fbDuplicateCampaign(id){
   _fbCampCol().doc(id).get().then(function(d){

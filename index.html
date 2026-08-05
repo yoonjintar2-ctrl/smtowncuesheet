@@ -555,7 +555,7 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
       <div class="tbr-row">
         <button class="tbr-btn" onclick="addMoreOnboarding()" title="방송사 엑셀 큐시트를 팝업에서 추가 온보딩">큐시트 추가</button>
         <button id="mergeBtn" class="tbr-btn" disabled onclick="confirmAndMerge()">
-          <div class="spinner" style="display:none;width:14px;height:14px;border-width:2px;margin-right:4px"></div>
+          <div class="spinner" style="width:13px;height:13px;border-width:2px;margin-right:4px;border-color:rgba(0,0,0,.18);border-top-color:#666"></div>
           <span class="btn-label">엑셀 다운로드</span>
         </button>
         <span class="tbr-sep"></span>
@@ -5530,6 +5530,30 @@ function ccmDrop(e,pos){
   _renderCCMOrder();
 }
 
+/* 파일 없이 화면 데이터만 있을 때의 엑셀 내보내기(큐시트 + raw 2시트) */
+function _mergeFromLiveRows(){
+  if(typeof XLSX==='undefined'){alert('엑셀 모듈을 불러오지 못했습니다.');return;}
+  try{
+    var rows=_liveRows;
+    var colSel=(_colConfig&&_colConfig.length)?_colConfig:_defaultColConfig();
+    var main=rows.map(function(r){ return colSel.map(function(i){ return r[i]!==undefined?r[i]:''; }); });
+    var ws1=XLSX.utils.aoa_to_sheet(main);
+    ws1['!cols']=colSel.map(function(i){return {wch:COL_WCH[i]||10};});
+    ws1['!freeze']={xSplit:0,ySplit:1};
+    var raw=rows.map(function(r){ var o=[]; for(var i=0;i<OUT_COLS.length;i++)o.push(r[i]!==undefined?r[i]:''); return o; });
+    var ws2=XLSX.utils.aoa_to_sheet(raw);
+    ws2['!cols']=OUT_COLS.map(function(_,i){return {wch:COL_WCH[i]||10};});
+    ws2['!freeze']={xSplit:0,ySplit:1};
+    var wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws1,'큐시트');
+    XLSX.utils.book_append_sheet(wb,ws2,'raw');
+    var n=new Date();
+    var stamp=n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0')
+             +'_'+String(n.getHours()).padStart(2,'0')+String(n.getMinutes()).padStart(2,'0');
+    XLSX.writeFile(wb,'큐시트_'+stamp+'.xlsx');
+    if(typeof log==='function')log('완료! '+(rows.length-1)+'행 내보냄','ok');
+  }catch(e){ alert('엑셀 생성 실패: '+e.message); }
+}
 function confirmAndMerge(){
   if(!_colConfig||_colConfig.length===0){
     alert('최소 1개 이상의 열을 선택해 주세요.');return;
@@ -5541,7 +5565,11 @@ function confirmAndMerge(){
 function mergeFiles(){
   // Pre-validation: 품목
   var loaded=files.filter(function(f){return f.status==='loaded';});
-  if(!loaded.length){log('로드된 파일이 없습니다','err');return;}
+  if(!loaded.length){
+    /* 캠페인·JSON으로 불러온 데이터만 있는 경우 → 화면 데이터를 그대로 내보낸다 */
+    if(_liveRows&&_liveRows.length>1){ _mergeFromLiveRows(); return; }
+    log('로드된 파일이 없습니다','err'); alert('내보낼 데이터가 없습니다.'); return;
+  }
 
   var unmatchedItem=[];
   loaded.forEach(function(f){
@@ -5914,8 +5942,15 @@ function mergeFiles(){
         var _wExtra=_kboMondayWarnings.length>15?('\n...외 '+(_kboMondayWarnings.length-15)+'건'):'';
         alert('⚠ KBO 생방은 월요일 경기가 없습니다.\n다음 '+_kboMondayWarnings.length+'건의 월요일 분배 데이터는 행 생성에서 제외되었습니다:\n\n'+_wList+_wExtra+'\n\n원본 큐시트에 월요일 횟수가 잘못 입력되어 있는지 확인하세요.');
       }
-    }catch(err){log('오류: '+err.message,'err');console.error(err);}
-    btn.classList.remove('loading');btn.disabled=false;
+    }catch(err){log('오류: '+err.message,'err');console.error(err);alert('엑셀 생성 중 오류: '+err.message);}
+    finally{
+      /* 어떤 경우에도 버튼을 원래 상태로 되돌린다(라벨이 사라져 보이던 문제) */
+      if(btn){ btn.classList.remove('loading'); btn.disabled=false;
+        var _lb=btn.querySelector('.btn-label'); if(_lb)_lb.style.display='';
+        var _sp=btn.querySelector('.spinner'); if(_sp)_sp.style.display='';
+      }
+      if(typeof updateBtn==='function'){try{updateBtn();}catch(_e){}}
+    }
   },60);
 }
 

@@ -697,7 +697,7 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
 <span></span>
           <span id="calendarMonthTitle" style="font-size:.78rem;font-weight:600;color:#666"></span>
         </div>
-        <div id="calendarFilterBar" style="background:#fff;border-bottom:1px solid var(--border);padding:4px 10px;font-size:.7rem;flex-shrink:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+        <div id="calendarFilterBar" style="background:#fafafa;border-bottom:1px solid var(--border);padding:4px 10px;font-size:.7rem;flex-shrink:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
         <div id="calendarSummaryBar" style="background:#f7f8fb;border-bottom:1px solid var(--border);padding:3px 10px;font-size:.66rem;color:#777;flex-shrink:0;line-height:1.5"></div>
         <div style="flex:1;min-height:0;overflow:auto;background:#fff;padding:14px 16px">
           <div id="calendarTabBody">데이터를 불러오면 캘린더가 표시됩니다.</div>
@@ -1202,7 +1202,13 @@ function loadRules(){
 var _savedFileHandle=null;
 var _colConfig=null;
 
-function saveRulesToFile(){
+/* 설정 변경 시 조용히 localStorage + 구글 계정에 동기화(디바운스 1.2초) */
+var _pvSyncTimer=null;
+function syncSettingsQuiet(){
+  clearTimeout(_pvSyncTimer);
+  _pvSyncTimer=setTimeout(function(){ try{ saveRulesToFile(true); }catch(e){} },1200);
+}
+function saveRulesToFile(quiet){
   // Save to localStorage only — no file dialog, no download
   try{
     var lsData={
@@ -1221,9 +1227,9 @@ function saveRulesToFile(){
     };
     localStorage.setItem('cusheet_rules_v1',JSON.stringify(lsData));
     try{ if(window._fbUser&&typeof _fbSaveSettings==='function')_fbSaveSettings(); }catch(e){}
-    showSaveToast('저장되었습니다.');
+    if(!quiet)showSaveToast('저장되었습니다.');
   }catch(e){
-    showSaveToast('저장 실패: '+e.message, true);
+    if(!quiet)showSaveToast('저장 실패: '+e.message, true);
   }
 }
 
@@ -2641,6 +2647,25 @@ function summaryDataToHTML(data){
 
 /* ═══ 요약 피벗 빌더 v3 (열 계층/나열·묶음필드·자동폰트색·엑셀·단일필터) ═══ */
 var _PV_VALS={9:'단가',10:'횟수'};
+/* 값 선택지: 소스 컬럼 + 백분율 여부(%는 항상 행 기준) */
+var _PV_VALOPTS=[
+  {id:'cnt',   src:10, pct:false, label:'횟수 (회)'},
+  {id:'price', src:9,  pct:false, label:'단가 (원)'},
+  {id:'cntPct',src:10, pct:true,  label:'횟수 (%)'},
+  {id:'prcPct',src:9,  pct:true,  label:'단가 (%)'}
+];
+function _pvValOpt(id){ for(var i=0;i<_PV_VALOPTS.length;i++)if(_PV_VALOPTS[i].id===id)return _PV_VALOPTS[i]; return _PV_VALOPTS[0]; }
+/* 색상 조합 프리셋 (헤더 / 소계 / 총합) */
+var _PV_COLOR_PRESETS=[
+  {id:'gray',  name:'무채색',   header:'#595959', sub:'#d9d9d9', grand:'#bfbfbf'},
+  {id:'blue',  name:'블루',     header:'#1f4e79', sub:'#dce6f1', grand:'#b8cce4'},
+  {id:'green', name:'그린',     header:'#375623', sub:'#e2efda', grand:'#c6e0b4'},
+  {id:'warm',  name:'웜 그레이',header:'#5a4a42', sub:'#efe7e1', grand:'#d9c9bf'},
+  {id:'navy',  name:'딥 네이비',header:'#1c2b4a', sub:'#e4e8f0', grand:'#c2cbdd'}
+];
+function _pvPreset(id){ for(var i=0;i<_PV_COLOR_PRESETS.length;i++)if(_PV_COLOR_PRESETS[i].id===id)return _PV_COLOR_PRESETS[i]; return _PV_COLOR_PRESETS[0]; }
+function pivotSetPreset(id){ var c=_pivotCfgInit(); var p=_pvPreset(id); c.preset=p.id; c.colors={header:p.header,sub:p.sub,grand:p.grand}; renderSummaryTab(); }
+function pivotSetValOpt(id){ var c=_pivotCfgInit(); var o=_pvValOpt(id); c.valOpt=o.id; c.val=o.src; c.pct=o.pct?'row':'none'; renderSummaryTab(); }
 var _PV_GROUPS={ dow:{label:'요일 묶음', subs:[[11,'월'],[12,'화'],[13,'수'],[14,'목'],[15,'금'],[16,'토'],[17,'일']]}, week:{label:'주차 묶음', subs:[[22,'1주'],[23,'2주'],[24,'3주'],[25,'4주'],[26,'5주'],[27,'6주']]} };
 var _PV_ROW_EXCLUDE=[3,9,10,11,12,13,14,15,16,17,22,23,24,25,26,27,34,35,36,41,54];
 var _PV_COL_EXCLUDE=[0,2,4,5,7,9,10,11,12,13,14,15,16,17,19,20,21,22,23,24,25,26,27,33,34,35,36,54];
@@ -2649,7 +2674,10 @@ function _pivotRowFlds(){ return _pivotFlds().filter(function(i){return _PV_ROW_
 function _pivotColItems(){ var a=['week']; _pivotFlds().forEach(function(i){ if(_PV_COL_EXCLUDE.indexOf(i)<0)a.push(i); }); return a; }
 function _pvTokLabel(t){ return (t==='dow'||t==='week')?_PV_GROUPS[t].label:OUT_COLS[+t]; }
 function _pivotDefaults(){ return {rows:[2],cols:[],colMode:'nest',val:10,pct:'none',subField:-1,colors:{header:'#595959',sub:'#d9d9d9',grand:'#bfbfbf'},filters:{},colOrder:null}; }
-function _pivotCfgInit(){ if(!window._pivotCfg)window._pivotCfg=_pivotDefaults(); var c=window._pivotCfg; if(!c.colors||!c.colors.header)c.colors={header:'#595959',sub:'#d9d9d9',grand:'#bfbfbf'}; if(!c.filters)c.filters={}; if(c.pct===true)c.pct='row'; if(!c.pct||c.pct===false)c.pct='none'; if(!c.cols)c.cols=[]; if(!c.rows)c.rows=[2]; if(!c.colMode)c.colMode='nest'; if(c.val!==9&&c.val!==10)c.val=10; if(!c.colJoin){ c.colJoin={}; (c.cols||[]).forEach(function(t){ c.colJoin[t]=(c.colMode==='flat')?'flat':'nest'; }); } if(!c.subFields){ c.subFields=(c.subField>=0)?[c.subField]:[]; } return c; }
+function _pivotCfgInit(){ if(!window._pivotCfg)window._pivotCfg=_pivotDefaults(); var c=window._pivotCfg; if(!c.colors||!c.colors.header)c.colors={header:'#595959',sub:'#d9d9d9',grand:'#bfbfbf'}; if(!c.filters)c.filters={}; if(c.pct===true)c.pct='row'; if(!c.pct||c.pct===false)c.pct='none'; if(!c.cols)c.cols=[]; if(!c.rows)c.rows=[2]; if(!c.colMode)c.colMode='nest'; if(c.val!==9&&c.val!==10)c.val=10;
+  if(!c.valOpt){ c.valOpt=(c.val===9?(c.pct==='row'?'prcPct':'price'):(c.pct==='row'?'cntPct':'cnt')); }
+  var _vo=_pvValOpt(c.valOpt); c.val=_vo.src; c.pct=_vo.pct?'row':'none';   /* %는 항상 행 기준 */
+  if(!c.preset)c.preset='gray'; if(!c.colJoin){ c.colJoin={}; (c.cols||[]).forEach(function(t){ c.colJoin[t]=(c.colMode==='flat')?'flat':'nest'; }); } if(!c.subFields){ c.subFields=(c.subField>=0)?[c.subField]:[]; } return c; }
 function pivotSetJoin(tok,v){ _pivotCfgInit().colJoin[tok]=v; renderSummaryTab(); }
 function pivotToggleSub(i,on){ var c=_pivotCfgInit(); if(!c.subFields)c.subFields=[]; var p=c.subFields.indexOf(i); if(on){if(p<0)c.subFields.push(i);}else{if(p>=0)c.subFields.splice(p,1);} renderSummaryTab(); }
 function _pvTextColor(bg){ var m=/#?([0-9a-fA-F]{6})/.exec(bg||''); if(!m)return '#000'; var n=parseInt(m[1],16),r=(n>>16)&255,g=(n>>8)&255,b=n&255; return ((0.299*r+0.587*g+0.114*b)/255)<0.58?'#fff':'#000'; }
@@ -2685,126 +2713,164 @@ function _pivotTemplateBar(){
   h+='<span style="color:#aaa">저장됨 '+list.length+'개 · 구글 계정에 동기화</span></div>';
   return h;
 }
+/* ═══ 피벗 빌더 v5: 드래그 기반 필드 배치 ═══
+   왼쪽 '사용 가능한 필드' 목록 → [행 설정] / [열 설정] 박스로 끌어다 놓기.
+   박스 안에서 다시 끌면 순서 변경, 열 박스는 좌/우 드롭으로 계층/나열 지정. */
+function _pvTokKey(t){ return (typeof t==='string')?('s:'+t):('n:'+t); }
+function _pvTokParse(k){ return (k.charAt(0)==='s')?k.slice(2):(+k.slice(2)); }
+function pivotPoolDragStart(e,key){ window._pvDrag={from:'pool',key:key}; if(e.dataTransfer){e.dataTransfer.effectAllowed='copyMove';try{e.dataTransfer.setData('text/plain',key);}catch(_e){}} }
+function pivotZoneDragStart(e,zone,key){ window._pvDrag={from:zone,key:key}; if(e.dataTransfer){e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',key);}catch(_e){}} }
+function pivotZoneOver(e,el){ if(e.preventDefault)e.preventDefault(); if(el)el.style.background='#eaf3fd'; }
+function pivotZoneLeave(e,el){ if(el)el.style.background=''; }
+/* 박스(빈 영역)에 드롭 → 맨 뒤에 추가 */
+function pivotZoneDrop(e,zone){
+  if(e.preventDefault)e.preventDefault(); if(e.stopPropagation)e.stopPropagation();
+  var boxEl=document.getElementById('pvZone-'+zone); if(boxEl)boxEl.style.background='';
+  var d=window._pvDrag; window._pvDrag=null; if(!d)return;
+  var tok=_pvTokParse(d.key); var c=_pivotCfgInit();
+  var allowed=(zone==='row')?_pivotRowFlds():_pivotColItems();
+  if(allowed.indexOf(tok)<0){ alert('이 필드는 '+(zone==='row'?'행':'열')+'에 사용할 수 없습니다.'); renderSummaryTab(); return; }
+  if(d.from==='row')c.rows=c.rows.filter(function(x){return x!==tok;});
+  if(d.from==='col')c.cols=c.cols.filter(function(x){return x!==tok;});
+  var arr=(zone==='row')?c.rows:c.cols;
+  if(arr.indexOf(tok)<0)arr.push(tok);
+  if(zone==='col'){ if(!c.colJoin)c.colJoin={}; if(!c.colJoin[tok])c.colJoin[tok]='nest'; }
+  c.subFields=(c.subFields||[]).filter(function(i){return c.rows.indexOf(i)>=0;});
+  renderSummaryTab();
+}
+/* 칩 위에 드롭 → 그 자리(앞/뒤)로 이동. 열은 왼쪽=하위계층 / 오른쪽=옆에 나열 */
+function pivotChipZoneOver(e,el,zone){
+  if(e.preventDefault)e.preventDefault(); if(e.stopPropagation)e.stopPropagation();
+  var r=el.getBoundingClientRect(); var right=(e.clientX-r.left)>r.width/2;
+  if(zone==='col'){ el.style.boxShadow=right?'inset -5px 0 0 #16a34a':'inset 5px 0 0 #0068b5'; el.setAttribute('data-zone',right?'flat':'nest'); }
+  else { el.style.boxShadow=right?'inset -5px 0 0 #0068b5':'inset 5px 0 0 #0068b5'; }
+  el.setAttribute('data-side',right?'after':'before');
+}
+function pivotChipZoneLeave(e,el){ el.style.boxShadow=''; }
+function pivotChipZoneDrop(e,el,zone,targetKey){
+  if(e.preventDefault)e.preventDefault(); if(e.stopPropagation)e.stopPropagation();
+  var side=el.getAttribute('data-side')||'after'; var join=el.getAttribute('data-zone')||'nest';
+  el.style.boxShadow='';
+  var d=window._pvDrag; window._pvDrag=null; if(!d)return;
+  var tok=_pvTokParse(d.key), target=_pvTokParse(targetKey);
+  if(tok===target)return;
+  var c=_pivotCfgInit();
+  var allowed=(zone==='row')?_pivotRowFlds():_pivotColItems();
+  if(allowed.indexOf(tok)<0){ alert('이 필드는 '+(zone==='row'?'행':'열')+'에 사용할 수 없습니다.'); return; }
+  if(d.from==='row')c.rows=c.rows.filter(function(x){return x!==tok;});
+  if(d.from==='col')c.cols=c.cols.filter(function(x){return x!==tok;});
+  var arr=((zone==='row')?c.rows:c.cols).filter(function(x){return x!==tok;});
+  var ti=arr.indexOf(target); if(ti<0)ti=arr.length-1;
+  arr.splice(side==='after'?ti+1:ti,0,tok);
+  if(zone==='row')c.rows=arr; else { c.cols=arr; if(!c.colJoin)c.colJoin={}; c.colJoin[tok]=join; }
+  c.subFields=(c.subFields||[]).filter(function(i){return c.rows.indexOf(i)>=0;});
+  renderSummaryTab();
+}
+function pivotRemoveField(zone,key){
+  var tok=_pvTokParse(key), c=_pivotCfgInit();
+  if(zone==='row')c.rows=c.rows.filter(function(x){return x!==tok;});
+  else c.cols=c.cols.filter(function(x){return x!==tok;});
+  c.subFields=(c.subFields||[]).filter(function(i){return c.rows.indexOf(i)>=0;});
+  renderSummaryTab();
+}
+function pivotClearZone(zone){ var c=_pivotCfgInit(); if(zone==='row'){c.rows=[];c.subFields=[];} else c.cols=[]; renderSummaryTab(); }
+
 function renderPivotBuilder(){
   var cfg=_pivotCfgInit();
-  function jsTok(t){ return (typeof t==='string')?("'"+t+"'"):t; }
-  function checklist(kind){ var items=kind==='row'?_pivotRowFlds():_pivotColItems(); var arr=kind==='row'?cfg.rows:cfg.cols; var h='<div style="max-height:128px;overflow:auto;border:1px solid #e0e0e6;border-radius:5px;padding:4px 6px;min-width:108px">'; items.forEach(function(t){ h+='<label style="display:block;white-space:nowrap;cursor:pointer"><input type="checkbox" onchange="pivotToggleField(\''+kind+'\','+jsTok(t)+',this.checked)"'+(arr.indexOf(t)>=0?' checked':'')+'> '+esc(_pvTokLabel(t))+'</label>'; }); return h+'</div>'; }
-  function chips(kind){ var arr=kind==='row'?cfg.rows:cfg.cols; if(!arr.length)return '<span style="color:#aaa;font-size:.68rem">없음</span>'; var h=''; arr.forEach(function(t){ h+='<span draggable="true" ondragstart="pivotChipDragStart(event,\''+kind+'\','+jsTok(t)+')" ondragover="pivotChipOver(event,this)" ondragleave="pivotChipLeave(event,this)" ondrop="pivotChipDrop(event,\''+kind+'\','+jsTok(t)+')" style="display:inline-block;padding:2px 9px;margin:2px;background:#eef;border:1px solid #ccd;border-radius:12px;cursor:grab;font-size:.7rem">⠿ '+esc(_pvTokLabel(t))+'</span>'; }); return h; }
-  function colStructUI(){ if(!cfg.cols.length)return '<span style="color:#aaa;font-size:.68rem">열 필드를 선택하세요</span>'; var _hint='<div style="font-size:.64rem;color:#888;margin-bottom:4px">칩을 다른 칩의 <b style="color:#0068b5">왼쪽</b>에 놓으면 <b>하위 계층</b>, <b style="color:#16a34a">오른쪽</b>에 놓으면 <b>옆에 나열</b>됩니다.</div>'; var groups=[],g=[]; cfg.cols.forEach(function(tok,idx){ var j=cfg.colJoin?cfg.colJoin[tok]:null; if(idx===0||j!=='flat'){g.push(tok);}else{groups.push(g);g=[tok];} }); if(g.length)groups.push(g); function chip(tok,ind){ return '<div draggable="true" ondragstart="pivotColStructDragStart(event,'+jsTok(tok)+')" ondragover="pivotColStructOver(event,this)" ondragleave="pivotColStructLeave(event,this)" ondrop="pivotColStructDrop(event,this,'+jsTok(tok)+')" style="padding:2px 9px;margin:2px 0 2px '+(ind*14)+'px;background:#eef;border:1px solid #ccd;border-radius:10px;cursor:grab;font-size:.7rem">'+(ind?'▸ ':'')+esc(_pvTokLabel(tok))+'</div>'; } var h=_hint+'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;margin-top:2px">'; groups.forEach(function(grp){ h+='<div style="border:1px dashed #bbc;border-radius:8px;padding:4px 6px;background:#fff">'; grp.forEach(function(tok,gi){ h+=chip(tok,gi); }); h+='</div>'; }); return h+'</div>'; }
-  var h='<div style="border:1px solid #d8d8de;border-radius:8px;padding:10px 12px;margin-bottom:12px;background:#fafafd">';
-  h+='<div style="font-weight:700;font-size:.82rem;margin-bottom:8px">🧮 피벗 요약 <span style="font-weight:400;color:#888;font-size:.7rem">· 현재 큐시트 필터 기준</span></div>';
-  h+='<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;font-size:.72rem">';
-  h+='<div><div style="font-weight:600;margin-bottom:3px">행 필드</div>'+checklist('row')+'</div>';
-  h+='<div><div style="font-weight:600;margin-bottom:3px">열 필드</div>'+checklist('col')+'</div>';
-  h+='<div><div style="font-weight:600;margin-bottom:3px">값</div>';
-  h+='<label style="display:block;cursor:pointer"><input type="radio" name="pvval" onchange="pivotSet(\'val\',10)"'+(cfg.val===10?' checked':'')+'> 횟수</label>';
-  h+='<label style="display:block;cursor:pointer"><input type="radio" name="pvval" onchange="pivotSet(\'val\',9)"'+(cfg.val===9?' checked':'')+'> 단가</label></div>';
-  h+='<div><div style="font-weight:600;margin-bottom:3px">전체 대비 %</div><select onchange="pivotSet(\'pct\',this.value)"><option value="none"'+(cfg.pct==='none'?' selected':'')+'>사용 안 함</option><option value="row"'+(cfg.pct==='row'?' selected':'')+'>행 기준</option><option value="col"'+(cfg.pct==='col'?' selected':'')+'>열 기준</option></select></div>';
-  h+='<div><div style="font-weight:600;margin-bottom:3px">서브토탈 기준 <span style="color:#999;font-weight:400">(중복)</span></div><div style="max-height:110px;overflow:auto;border:1px solid #e0e0e6;border-radius:5px;padding:3px 6px;min-width:90px">';
-  if(!cfg.rows.length)h+='<span style="color:#aaa">행 필드 없음</span>';
-  cfg.rows.forEach(function(i){ h+='<label style="display:block;white-space:nowrap;cursor:pointer"><input type="checkbox" onchange="pivotToggleSub('+i+',this.checked)"'+((cfg.subFields||[]).indexOf(i)>=0?' checked':'')+'> '+esc(OUT_COLS[i])+'</label>'; });
+  var K=_pvTokKey;
+  /* ── 사용 가능한 필드 풀(행/열 어디든 쓸 수 있는 항목 전체) ── */
+  function pool(){
+    var rowF=_pivotRowFlds(), colF=_pivotColItems();
+    var seen={}, all=[];
+    rowF.concat(colF).forEach(function(t){ var k=K(t); if(!seen[k]){seen[k]=1;all.push(t);} });
+    var used={}; cfg.rows.forEach(function(t){used[K(t)]=1;}); cfg.cols.forEach(function(t){used[K(t)]=1;});
+    var h='<div style="display:flex;flex-wrap:wrap;gap:4px;max-height:150px;overflow:auto;border:1px solid #e0e0e6;border-radius:6px;padding:7px;background:#fff">';
+    all.forEach(function(t){
+      var k=K(t), isUsed=!!used[k];
+      var canRow=rowF.indexOf(t)>=0, canCol=colF.indexOf(t)>=0;
+      var tip=(canRow&&canCol)?'행·열 모두 가능':(canRow?'행 전용':'열 전용');
+      h+='<span draggable="true" ondragstart="pivotPoolDragStart(event,\''+k+'\')" title="'+tip+' — 끌어서 행/열 박스에 놓으세요"'
+        +' style="padding:3px 10px;border-radius:12px;font-size:.69rem;cursor:grab;border:1px solid '+(isUsed?'#d8d8de':'#c3c9d4')+';'
+        +'background:'+(isUsed?'#f2f2f5':'#fff')+';color:'+(isUsed?'#aaa':'#333')+'">⠿ '+esc(_pvTokLabel(t))+'</span>';
+    });
+    return h+'</div>';
+  }
+  /* ── 행 박스 ── */
+  function rowZone(){
+    var h='<div id="pvZone-row" ondragover="pivotZoneOver(event,this)" ondragleave="pivotZoneLeave(event,this)" ondrop="pivotZoneDrop(event,\'row\')"'
+      +' style="min-height:64px;border:2px dashed #b9c2d0;border-radius:8px;padding:7px;background:#fff;transition:background .12s">';
+    if(!cfg.rows.length)h+='<span style="color:#aaa;font-size:.68rem">여기로 필드를 끌어다 놓으세요 (위 → 아래 순서로 그룹핑)</span>';
+    cfg.rows.forEach(function(t,i){
+      var k=K(t);
+      h+='<div draggable="true" ondragstart="pivotZoneDragStart(event,\'row\',\''+k+'\')" ondragover="pivotChipZoneOver(event,this,\'row\')" ondragleave="pivotChipZoneLeave(event,this)" ondrop="pivotChipZoneDrop(event,this,\'row\',\''+k+'\')"'
+        +' style="display:flex;align-items:center;gap:6px;padding:4px 8px;margin:3px 0;background:#eef2fa;border:1px solid #c3ccdd;border-radius:6px;cursor:grab;font-size:.71rem">'
+        +'<span style="color:#98a;font-size:.62rem;min-width:14px">'+(i+1)+'</span><span style="flex:1">'+esc(_pvTokLabel(t))+'</span>'
+        +'<label style="font-size:.62rem;color:#666;cursor:pointer" title="이 필드마다 소계를 넣습니다"><input type="checkbox" onchange="pivotToggleSub('+(+t)+',this.checked)"'+((cfg.subFields||[]).indexOf(+t)>=0?' checked':'')+' style="vertical-align:middle"> 소계</label>'
+        +'<span onclick="pivotRemoveField(\'row\',\''+k+'\')" title="제거" style="cursor:pointer;color:#c66;font-weight:700;padding:0 3px">✕</span></div>';
+    });
+    return h+'</div>';
+  }
+  /* ── 열 박스 (계층/나열 구조를 그대로 시각화) ── */
+  function colZone(){
+    var h='<div id="pvZone-col" ondragover="pivotZoneOver(event,this)" ondragleave="pivotZoneLeave(event,this)" ondrop="pivotZoneDrop(event,\'col\')"'
+      +' style="min-height:64px;border:2px dashed #b9c2d0;border-radius:8px;padding:7px;background:#fff;transition:background .12s">';
+    if(!cfg.cols.length){ h+='<span style="color:#aaa;font-size:.68rem">여기로 필드를 끌어다 놓으세요 (비우면 값 한 열만 표시)</span>'; return h+'</div>'; }
+    var groups=[],g=[];
+    cfg.cols.forEach(function(tok,idx){ var j=cfg.colJoin?cfg.colJoin[tok]:null; if(idx===0||j!=='flat'){g.push(tok);}else{groups.push(g);g=[tok];} });
+    if(g.length)groups.push(g);
+    h+='<div style="display:flex;flex-wrap:wrap;gap:9px;align-items:flex-start">';
+    groups.forEach(function(grp){
+      h+='<div style="border:1px dashed #c9cfda;border-radius:7px;padding:4px 6px;background:#fbfcfe">';
+      grp.forEach(function(tok,gi){
+        var k=K(tok);
+        h+='<div draggable="true" ondragstart="pivotZoneDragStart(event,\'col\',\''+k+'\')" ondragover="pivotChipZoneOver(event,this,\'col\')" ondragleave="pivotChipZoneLeave(event,this)" ondrop="pivotChipZoneDrop(event,this,\'col\',\''+k+'\')"'
+          +' style="display:flex;align-items:center;gap:5px;padding:3px 8px;margin:3px 0 3px '+(gi*14)+'px;background:#eef2fa;border:1px solid #c3ccdd;border-radius:6px;cursor:grab;font-size:.71rem;white-space:nowrap">'
+          +(gi?'<span style="color:#98a">▸</span>':'')+'<span>'+esc(_pvTokLabel(tok))+'</span>'
+          +'<span onclick="pivotRemoveField(\'col\',\''+k+'\')" title="제거" style="cursor:pointer;color:#c66;font-weight:700;padding:0 2px">✕</span></div>';
+      });
+      h+='</div>';
+    });
+    return h+'</div></div>';
+  }
+
+  var h='<div style="border:1px solid #d8d8de;border-radius:8px;padding:11px 13px;margin-bottom:12px;background:#fafafd">';
+  h+='<div style="font-weight:700;font-size:.82rem;margin-bottom:7px">🧮 피벗 요약 <span style="font-weight:400;color:#888;font-size:.7rem">· 현재 큐시트 필터 기준</span></div>';
+
+  h+='<div style="font-size:.72rem;margin-bottom:4px"><b>사용 가능한 필드</b> <span style="color:#999;font-size:.66rem">— 아래 행/열 박스로 끌어다 놓으세요</span></div>';
+  h+=pool();
+
+  h+='<div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap">';
+  h+='<div style="flex:1 1 320px;min-width:280px"><div style="font-size:.72rem;margin-bottom:3px;display:flex;align-items:center"><b>행 설정</b><span style="color:#999;font-size:.65rem;margin-left:6px">위→아래 = 바깥→안쪽 그룹</span><button onclick="pivotClearZone(\'row\')" class="pv-tbtn" style="margin-left:auto;font-size:.62rem;padding:1px 7px">비우기</button></div>'+rowZone()+'</div>';
+  h+='<div style="flex:1 1 320px;min-width:280px"><div style="font-size:.72rem;margin-bottom:3px;display:flex;align-items:center"><b>열 설정</b><span style="color:#999;font-size:.65rem;margin-left:6px">칩 <b style="color:#0068b5">왼쪽</b>=하위계층 / <b style="color:#16a34a">오른쪽</b>=옆에 나열</span><button onclick="pivotClearZone(\'col\')" class="pv-tbtn" style="margin-left:auto;font-size:.62rem;padding:1px 7px">비우기</button></div>'+colZone()+'</div>';
+  h+='</div>';
+
+  /* 값 · 색상 · 필터 */
+  h+='<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;margin-top:11px;font-size:.72rem">';
+  h+='<div><div style="font-weight:600;margin-bottom:3px">값</div><select onchange="pivotSetValOpt(this.value)" style="font-size:.71rem;padding:2px 6px">';
+  _PV_VALOPTS.forEach(function(o){ h+='<option value="'+o.id+'"'+(cfg.valOpt===o.id?' selected':'')+'>'+o.label+'</option>'; });
+  h+='</select><div style="color:#999;font-size:.63rem;margin-top:2px">% 는 행 합계 기준</div></div>';
+
+  h+='<div><div style="font-weight:600;margin-bottom:3px">색상 조합</div><select onchange="pivotSetPreset(this.value)" style="font-size:.71rem;padding:2px 6px">';
+  _PV_COLOR_PRESETS.forEach(function(p){ h+='<option value="'+p.id+'"'+(cfg.preset===p.id?' selected':'')+'>'+p.name+'</option>'; });
+  h+='</select><div style="display:flex;gap:3px;margin-top:4px">';
+  ['header','sub','grand'].forEach(function(k){ h+='<span title="'+k+'" style="width:26px;height:13px;border:1px solid #ccc;border-radius:3px;display:inline-block;background:'+cfg.colors[k]+'"></span>'; });
   h+='</div></div>';
-  h+='<div><div style="font-weight:600;margin-bottom:3px">색상</div><div style="display:flex;gap:8px;font-size:.66rem;text-align:center">';
-  h+='<label>헤더<br><input type="color" value="'+cfg.colors.header+'" onchange="pivotSetColor(\'header\',this.value)"></label>';
-  h+='<label>소계<br><input type="color" value="'+cfg.colors.sub+'" onchange="pivotSetColor(\'sub\',this.value)"></label>';
-  h+='<label>총합<br><input type="color" value="'+cfg.colors.grand+'" onchange="pivotSetColor(\'grand\',this.value)"></label></div></div>';
+
+  [[1,'품목'],[33,'PP'],[0,'채널']].forEach(function(pf){
+    var vals=_pvDistinct(pf[0]); var cur=(cfg.filters[pf[0]]||'');
+    h+='<div><div style="font-weight:600;margin-bottom:3px">'+pf[1]+' 필터</div><select onchange="pivotFilterChange('+pf[0]+',this.value)" style="min-width:106px;font-size:.7rem;padding:2px 5px"><option value="">(전체)</option>';
+    vals.forEach(function(v){ h+='<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(v)+'</option>'; });
+    h+='</select></div>';
+  });
+  h+='<div style="align-self:flex-end"><button onclick="_pivotCfgInit().filters={};renderSummaryTab()" class="pv-tbtn" style="font-size:.66rem">필터 해제</button></div>';
   h+='</div>';
-  h+='<div style="margin-top:8px;font-size:.72rem;display:flex;flex-wrap:wrap;gap:18px;align-items:center">';
-  h+='<div><b>행 순서</b> (드래그): '+chips('row')+'</div><div><b>열 구조</b> <span style="color:#999;font-size:.66rem">(칩을 다른 칩 <b>아래</b>=계층/하위, <b>위</b>=옆 블록/나열)</span><br>'+colStructUI()+'</div></div>';
-  h+='<div style="margin-top:8px;font-size:.72rem;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end">';
-  [[1,'품목'],[33,'PP'],[0,'채널']].forEach(function(pf){ var vals=_pvDistinct(pf[0]); var cur=(cfg.filters[pf[0]]||''); h+='<div><div style="font-weight:600;margin-bottom:2px">'+pf[1]+' 필터</div><select onchange="pivotFilterChange('+pf[0]+',this.value)" style="min-width:108px;font-size:.7rem"><option value="">(전체)</option>'; vals.forEach(function(v){ h+='<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(v)+'</option>'; }); h+='</select></div>'; });
-  h+='<div><button onclick="_pivotCfgInit().filters={};renderSummaryTab()" style="font-size:.68rem;padding:3px 8px;border:1px solid #ccc;border-radius:5px;background:#fff;cursor:pointer">필터 해제</button></div>';
-  h+='</div>';
+
   h+=_pivotTemplateBar();
   h+='<div style="margin-top:10px;overflow:auto">'+_pivotTableHTML()+'</div></div>';
   return h;
 }
-function _pvNum(r,i){ return parseFloat(String(r[i]==null?'':r[i]).replace(/[^0-9.\-]/g,''))||0; }
-function _pivotModel(){
-  var cfg=_pivotCfgInit();
-  var rows=(typeof filterLiveRowsByPV==='function')?filterLiveRowsByPV((_liveRows||[]).slice(1)):((_liveRows||[]).slice(1));
-  rows=_pvApplyFilters(rows);
-  var rmap={},rorder=[];
-  rows.forEach(function(r){ var k=cfg.rows.map(function(i){return String(r[i]==null?'':r[i]);}); var kk=k.join(''); if(!(kk in rmap)){rmap[kk]={k:k,rows:[]};rorder.push(kk);} rmap[kk].rows.push(r); });
-  rorder.sort(function(a,b){ var ca=rmap[a].k,cb=rmap[b].k; for(var i=0;i<ca.length;i++){ if(ca[i]!==cb[i]){ var f=cfg.rows[i]; return (typeof _pvCmpVal==='function')?_pvCmpVal(f,ca[i],cb[i]):String(ca[i]).localeCompare(cb[i],'ko'); } } return 0; });
-  var tokens=cfg.cols.slice();
-  function tokSpecs(tok){ if(tok==='dow'||tok==='week'){ return _PV_GROUPS[tok].subs.map(function(s){return {label:s[1],src:s[0]};}); } var f=+tok; return _pvDistinctRows(rows,f).map(function(v){return {label:v,f:f,val:v,src:cfg.val};}); }
-  function buildBlock(toks){ var lists=toks.map(tokSpecs); var combos=[[]]; lists.forEach(function(sp){ var nc=[]; combos.forEach(function(cmb){ sp.forEach(function(s){ nc.push(cmb.concat([s])); }); }); combos=nc; }); var leaves=combos.map(function(cmb){ var src=cfg.val,preds=[]; cmb.forEach(function(s){ if(s.f!=null)preds.push({f:s.f,val:s.val}); else src=s.src; }); return {label:cmb.map(function(s){return s.label;}).join(' ▸ '),src:src,preds:preds}; }); return {title:toks.map(_pvTokLabel).join(' ▸ '),leaves:leaves}; }
-  var blocks=[];
-  if(!tokens.length){ blocks.push({title:_PV_VALS[cfg.val],leaves:[{label:'값',src:cfg.val,preds:[]}]}); }
-  else { var grp=[]; tokens.forEach(function(tok,idx){ var j=cfg.colJoin?cfg.colJoin[tok]:null; if(idx===0||j!=='flat'){ grp.push(tok); } else { blocks.push(buildBlock(grp)); grp=[tok]; } }); if(grp.length)blocks.push(buildBlock(grp)); }
-  blocks.forEach(function(b){ b.cells={}; b.rowTot={}; b.colTot=b.leaves.map(function(){return 0;}); b.grand=0; b.align=b.leaves.some(function(lf){return lf.src===9;})?'right':'center'; });
-  rorder.forEach(function(rk){ var grp=rmap[rk].rows; blocks.forEach(function(b){ var arr=b.leaves.map(function(){return 0;}),tot=0; grp.forEach(function(r){ b.leaves.forEach(function(lf,li){ var ok=true; for(var p=0;p<lf.preds.length;p++){ if(String(r[lf.preds[p].f]==null?'':r[lf.preds[p].f])!==lf.preds[p].val){ok=false;break;} } if(ok)arr[li]+=_pvNum(r,lf.src); }); }); b.leaves.forEach(function(lf,li){ tot+=arr[li]; b.colTot[li]+=arr[li]; }); b.cells[rk]=arr; b.rowTot[rk]=tot; b.grand+=tot; }); });
-  return {cfg:cfg,rmap:rmap,rorder:rorder,blocks:blocks};
-}
-function _pvFmt(v,rowBase,colBase,pct){ if(pct==='row')return rowBase>0?(Math.round(v/rowBase*1000)/10)+'%':'0%'; if(pct==='col')return colBase>0?(Math.round(v/colBase*1000)/10)+'%':'0%'; return (Math.round(v*100)/100).toLocaleString(); }
-function _pivotTableHTML(){
-  var cfg=_pivotCfgInit();
-  if(!cfg.rows.length)return '<div style="color:#999;font-size:.72rem">행 필드를 1개 이상 선택하세요.</div>';
-  var M=_pivotModel(), blocks=M.blocks, rorder=M.rorder, rmap=M.rmap, nf=cfg.rows.length, pct=cfg.pct;
-  var CH=cfg.colors.header,CS=cfg.colors.sub,CG=cfg.colors.grand, TH=_pvTextColor(CH),TS=_pvTextColor(CS),TG=_pvTextColor(CG),bd='#c9c9cf';
-  var valLabel=_PV_VALS[cfg.val]||'값';
-  var cap='<div style="text-align:right;font-size:.7rem;color:#555;margin-bottom:3px">값: <b>'+esc(valLabel)+'</b>'+(pct!=='none'?' · '+(pct==='row'?'행 기준 %':'열 기준 %'):'')+'</div>';
-  var hstyle='border:1px solid '+bd+';background:'+CH+';color:'+TH+';padding:3px 9px;text-align:center;font-weight:600';
-  var t='<table style="border-collapse:collapse;font-size:.72rem;white-space:nowrap"><thead><tr>';
-  cfg.rows.forEach(function(i){ t+='<th rowspan="2" style="'+hstyle+';position:sticky;top:0">'+esc(OUT_COLS[i])+'</th>'; });
-  blocks.forEach(function(b){ t+='<th colspan="'+(b.leaves.length+1)+'" style="'+hstyle+'">'+esc(b.title)+'</th>'; });
-  t+='</tr><tr>';
-  blocks.forEach(function(b){ b.leaves.forEach(function(lf){ t+='<th style="'+hstyle+'">'+esc(lf.label)+'</th>'; }); t+='<th style="'+hstyle+'">합계</th>'; });
-  t+='</tr></thead><tbody>';
-  var subPos=(cfg.subFields||[]).map(function(f){return cfg.rows.indexOf(f);}).filter(function(p){return p>=0;});
-  subPos=subPos.filter(function(v,i){return subPos.indexOf(v)===i;}).sort(function(a,b){return a-b;});
-  var inner=subPos.length?subPos[subPos.length-1]:-1;
-  function segKey(k){ return inner>=0?k.slice(0,inner+1).join(''):'__all__'; }
-  var segments=[],cur=null,curKey=null;
-  rorder.forEach(function(rk){ var sk=segKey(rmap[rk].k); if(sk!==curKey){ cur=[]; segments.push(cur); curKey=sk; } cur.push(rk); });
-  function align(a){ return 'text-align:'+a; }
-  function subtotalRow(pos,rkeys){ var lbl=rmap[rkeys[0]].k[pos]; var s='<tr style="background:'+CS+';color:'+TS+';font-weight:600"><td colspan="'+nf+'" style="border:1px solid '+bd+';padding:2px 9px;text-align:center">▸ '+esc(lbl)+' 소계</td>'; blocks.forEach(function(b){ var sub=b.leaves.map(function(){return 0;}),stot=0; rkeys.forEach(function(rk){ b.cells[rk].forEach(function(v,li){sub[li]+=v;}); stot+=b.rowTot[rk]; }); b.leaves.forEach(function(lf,li){ s+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(sub[li],stot,b.colTot[li],pct)+'</td>'; }); s+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(stot,stot,b.grand,pct)+'</td>'; }); return s+'</tr>'; }
-  var acc={}; subPos.forEach(function(p){acc[p]=[];});
-  segments.forEach(function(seg,si){
-    var keys=seg.map(function(rk){return rmap[rk].k;});
-    var span=[]; for(var r=0;r<keys.length;r++)span.push([]);
-    for(var ci=0;ci<nf;ci++){ if(cfg.rows[ci]===4||cfg.rows[ci]===5){ for(var r=0;r<keys.length;r++)span[r][ci]=1; continue; } var r=0; while(r<keys.length){ var pref=keys[r].slice(0,ci+1).join(''); var e=r+1; while(e<keys.length&&keys[e].slice(0,ci+1).join('')===pref)e++; span[r][ci]=e-r; for(var q=r+1;q<e;q++)span[q][ci]=0; r=e; } }
-    seg.forEach(function(rk,ri){ var kk=rmap[rk].k; t+='<tr>';
-      for(var ci=0;ci<nf;ci++){ if(span[ri][ci]>0){ t+='<td'+(span[ri][ci]>1?' rowspan="'+span[ri][ci]+'"':'')+' style="border:1px solid '+bd+';padding:2px 9px;text-align:center;vertical-align:top">'+esc(kk[ci])+'</td>'; } }
-      blocks.forEach(function(b){ var arr=b.cells[rk]; b.leaves.forEach(function(lf,li){ var v=arr[li]; t+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+((v||pct==='none')?_pvFmt(v,b.rowTot[rk],b.colTot[li],pct):'')+'</td>'; }); t+='<td style="border:1px solid '+bd+';padding:2px 9px;font-weight:600;'+align(b.align)+'">'+_pvFmt(b.rowTot[rk],b.rowTot[rk],b.grand,pct)+'</td>'; });
-      t+='</tr>';
-    });
-    subPos.forEach(function(p){ seg.forEach(function(rk){acc[p].push(rk);}); });
-    var nextK=(si+1<segments.length)?rmap[segments[si+1][0]].k:null, curK=rmap[seg[0]].k;
-    subPos.slice().sort(function(a,b){return b-a;}).forEach(function(p){ var closing=!nextK||nextK.slice(0,p+1).join('')!==curK.slice(0,p+1).join(''); if(closing){ t+=subtotalRow(p,acc[p]); acc[p]=[]; } });
-  });
-  t+='<tr style="background:'+CG+';color:'+TG+';font-weight:700"><td colspan="'+nf+'" style="border:1px solid '+bd+';padding:2px 9px;text-align:center">총합계</td>';
-  blocks.forEach(function(b){ b.leaves.forEach(function(lf,li){ t+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(b.colTot[li],b.grand,b.colTot[li],pct)+'</td>'; }); t+='<td style="border:1px solid '+bd+';padding:2px 9px;'+align(b.align)+'">'+_pvFmt(b.grand,b.grand,b.grand,pct)+'</td>'; });
-  t+='</tr></tbody></table>';
-  return cap+t;
-}
-function pivotExportExcel(){
-  if(typeof XLSX==='undefined'){alert('엑셀 모듈을 불러오지 못했습니다.');return;}
-  var cfg=_pivotCfgInit(); if(!cfg.rows.length){alert('행 필드를 선택하세요.');return;}
-  var M=_pivotModel(), blocks=M.blocks, rorder=M.rorder, rmap=M.rmap, nf=cfg.rows.length;
-  var aoa=[],merges=[];
-  var row0=[],row1=[]; cfg.rows.forEach(function(i){ row0.push(OUT_COLS[i]); row1.push(''); });
-  var col=nf;
-  blocks.forEach(function(b){ row0.push(b.title); for(var j=1;j<b.leaves.length+1;j++)row0.push(''); merges.push({s:{r:0,c:col},e:{r:0,c:col+b.leaves.length}}); b.leaves.forEach(function(lf){row1.push(lf.label);}); row1.push('합계'); col+=b.leaves.length+1; });
-  cfg.rows.forEach(function(i,ci){ merges.push({s:{r:0,c:ci},e:{r:1,c:ci}}); });
-  aoa.push(row0); aoa.push(row1);
-  var subPos=(cfg.subFields||[]).map(function(f){return cfg.rows.indexOf(f);}).filter(function(p){return p>=0;});
-  subPos=subPos.filter(function(v,i){return subPos.indexOf(v)===i;}).sort(function(a,b){return a-b;});
-  var inner=subPos.length?subPos[subPos.length-1]:-1;
-  function segKey(k){ return inner>=0?k.slice(0,inner+1).join(''):'__all__'; }
-  var segs=[],cur=null,ck=null;
-  rorder.forEach(function(rk){ var sk=segKey(rmap[rk].k); if(sk!==ck){cur=[];segs.push(cur);ck=sk;} cur.push(rk); });
-  function subRow(pos,rkeys){ var lbl=rmap[rkeys[0]].k[pos]; var r=[]; for(var i=0;i<nf;i++)r.push(i===0?('▸ '+lbl+' 소계'):''); blocks.forEach(function(b){ var sub=b.leaves.map(function(){return 0;}),stot=0; rkeys.forEach(function(rk){ b.cells[rk].forEach(function(v,li){sub[li]+=v;}); stot+=b.rowTot[rk]; }); sub.forEach(function(v){r.push(v);}); r.push(stot); }); return r; }
-  var acc={}; subPos.forEach(function(p){acc[p]=[];});
-  segs.forEach(function(seg,si){ var keys=seg.map(function(rk){return rmap[rk].k;}); var span=[]; for(var _r=0;_r<keys.length;_r++)span.push([]); for(var ci=0;ci<nf;ci++){ var _r=0; while(_r<keys.length){ var pref=keys[_r].slice(0,ci+1).join('\u0001'); var _e=_r+1; while(_e<keys.length&&keys[_e].slice(0,ci+1).join('\u0001')===pref)_e++; span[_r][ci]=_e-_r; for(var _q=_r+1;_q<_e;_q++)span[_q][ci]=0; _r=_e; } } var baseRow=aoa.length; seg.forEach(function(rk,ri){ var kk=rmap[rk].k; var r=[]; for(var ci=0;ci<nf;ci++){ if(span[ri][ci]>0){ r.push(kk[ci]); if(span[ri][ci]>1)merges.push({s:{r:baseRow+ri,c:ci},e:{r:baseRow+ri+span[ri][ci]-1,c:ci}}); } else { r.push(''); } } blocks.forEach(function(b){ b.cells[rk].forEach(function(v){r.push(v);}); r.push(b.rowTot[rk]); }); aoa.push(r); }); subPos.forEach(function(p){seg.forEach(function(rk){acc[p].push(rk);});}); var nextK=(si+1<segs.length)?rmap[segs[si+1][0]].k:null, curK=rmap[seg[0]].k; subPos.slice().sort(function(a,b){return b-a;}).forEach(function(p){ var closing=!nextK||nextK.slice(0,p+1).join('')!==curK.slice(0,p+1).join(''); if(closing){ aoa.push(subRow(p,acc[p])); acc[p]=[]; } }); });
-  var gr=[]; for(var i=0;i<nf;i++)gr.push(i===0?'총합계':''); blocks.forEach(function(b){ b.colTot.forEach(function(v){gr.push(v);}); gr.push(b.grand); }); aoa.push(gr);
-  var _mx=0; aoa.forEach(function(r){ if(r&&r.length>_mx)_mx=r.length; });
-  var _cols=[]; for(var _i=0;_i<_mx;_i++)_cols.push(_i<nf?18:13);
-  exportAOAStyled(aoa,merges,{cols:_cols,headerRows:2,name:'피벗',
-    file:'피벗요약_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx'});
-}
 function renderSummaryTab(){
+  try{ syncSettingsQuiet(); }catch(e){}   /* 요약 설정도 계정에 저장 */
   var el=document.getElementById('summaryTabBody');
   if(!el)return;
   el.innerHTML=renderPivotBuilder();
@@ -2956,7 +3022,7 @@ function calChSave(){ var order=[]; document.querySelectorAll('#calChList .calch
 
 function _calApplyFilters(body){ var f=window._calFilters; if(!f)return body; return body.filter(function(r){ if(f.ch&&String(r[0]||'')!==f.ch)return false; if(f.item&&String(r[1]||'')!==f.item)return false; if(f.pp&&String(r[33]||'').replace(/^\d+\)\s*/,'')!==f.pp)return false; return true; }); }
 function _calDistinct(col){ var m={},o=[]; (_liveRows||[]).slice(1).forEach(function(r){ var v=col===33?String(r[33]||'').replace(/^\d+\)\s*/,''):String(r[col]==null?'':r[col]); if(v&&!m[v]){m[v]=1;o.push(v);} }); o.sort(function(a,b){return a.localeCompare(b,'ko');}); return o; }
-function calSetSort(v){ window._calSortMode=v; if(typeof saveRulesToFile==='function'){try{saveRulesToFile();}catch(e){}} renderCalendarTab(); }
+function calSetSort(v){ window._calSortMode=v; syncSettingsQuiet(); renderCalendarTab(); }
 function renderCalendarFilterBar(){
   var el=document.getElementById('calendarFilterBar'); if(!el)return;
   if(!window._calFilters)window._calFilters={ch:'',item:'',pp:''};
@@ -3119,7 +3185,7 @@ function renderCalendarTab(){
   var h='<div style="overflow-x:auto"><table style="border-collapse:collapse;table-layout:fixed;width:100%;min-width:980px;font-size:.62rem"><thead><tr>';
   CAL_WD_LABELS.forEach(function(wd,i){
     var isWknd=(i===5||i===6);
-    h+='<th style="border:1px solid #ccc;padding:4px 6px;background:'+(isWknd?'#f7ecec':'#eef1f8')+';width:14.28%">'+wd+'</th>';
+    h+='<th style="border:1px solid #ccc;padding:4px 6px;background:'+(isWknd?'#ebebeb':'#f2f2f2')+';color:#333;width:14.28%">'+wd+'</th>';
   });
   h+='</tr></thead><tbody>';
   grid.weeks.forEach(function(week){
@@ -3127,7 +3193,7 @@ function renderCalendarTab(){
     week.forEach(function(cell,i){
       var isWknd=(i===5||i===6);
       if(!cell){h+='<td style="border:1px solid #eee;background:#fafafa;vertical-align:top"></td>';return;}
-      h+='<td style="border:1px solid #ddd;padding:3px 4px;vertical-align:top;'+(isWknd?'background:#fffaf9':'')+'">'
+      h+='<td style="border:1px solid #ddd;padding:3px 4px;vertical-align:top;'+(isWknd?'background:#fafafa':'')+'">'
         +'<div style="font-weight:700;font-size:.7rem;margin-bottom:3px;color:#333">'+cell.day+'일</div>';
       if(cell.entries.length){
         h+='<table style="border-collapse:collapse;width:100%;font-size:.58rem">';
@@ -3258,10 +3324,10 @@ function renderPPChTable(){
   body.innerHTML='<tr><td colspan="6" style="padding:4px 8px;background:#f0f6ff;color:#0068b5;font-size:.68rem">ℹ️ <b>개인(사용자) 규칙이 기본 규칙보다 우선</b> 적용됩니다. 새 규칙은 맨 위(최우선)에 추가됩니다.</td></tr>'+mappingRules.map(function(r,i){
     var _b=_isDefaultMap(r)?'<span style="font-size:.58rem;color:#888;border:1px solid #ccc;border-radius:8px;padding:0 5px;white-space:nowrap">기본</span>':'<span style="font-size:.58rem;color:#0068b5;border:1px solid #9cf;border-radius:8px;padding:0 5px;background:#eef6ff;white-space:nowrap">개인 우선</span>';
     return'<tr><td class="row-num">'+(i+1)+'<br>'+_b+'</td>'
-      +'<td><input class="map-input" value="'+esc(r.fileIncludes||'')+'" oninput="mappingRules['+i+'].fileIncludes=this.value;_liveRows=null;renderLivePreview()"></td>'
-      +'<td><input class="map-input" value="'+esc(r.sheetIncludes||'')+'" oninput="mappingRules['+i+'].sheetIncludes=this.value;_liveRows=null;renderLivePreview()"></td>'
-      +'<td><input class="map-input" value="'+esc(r.pp||'')+'" oninput="mappingRules['+i+'].pp=this.value;_liveRows=null;renderLivePreview()"></td>'
-      +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="mappingRules['+i+'].channel=this.value;_liveRows=null;renderLivePreview()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.fileIncludes||'')+'" oninput="mappingRules['+i+'].fileIncludes=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.sheetIncludes||'')+'" oninput="mappingRules['+i+'].sheetIncludes=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.pp||'')+'" oninput="mappingRules['+i+'].pp=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="mappingRules['+i+'].channel=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
       +'<td><button class="btn-del-row" onclick="mappingRules.splice('+i+',1);renderPPChTable()">×</button></td>'
       +'</tr>';
   }).join('');
@@ -3275,8 +3341,8 @@ function renderSoakedTable(){
   if(preview)preview.textContent=soakedRules.map(function(r){return r.fileKeyword+'→'+r.label;}).join(' / ')||'규칙 없음';
   body.innerHTML=soakedRules.map(function(r,i){
     return'<tr><td class="row-num">'+(i+1)+'</td>'
-      +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="soakedRules['+i+'].fileKeyword=this.value;_liveRows=null;renderLivePreview()"></td>'
-      +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="soakedRules['+i+'].label=this.value;_liveRows=null;renderLivePreview()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="soakedRules['+i+'].fileKeyword=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="soakedRules['+i+'].label=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
       +'<td><button class="btn-del-row" onclick="soakedRules.splice('+i+',1);renderSoakedTable()">×</button></td>'
       +'</tr>';
   }).join('');
@@ -3287,8 +3353,8 @@ function renderItemTable(){
   var body=document.getElementById('itemBody');if(!body)return;
   body.innerHTML=itemRules.map(function(r,i){
     return'<tr><td class="row-num">'+(i+1)+'</td>'
-      +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="itemRules['+i+'].fileKeyword=this.value;_liveRows=null;renderLivePreview()"></td>'
-      +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="itemRules['+i+'].label=this.value;_liveRows=null;renderLivePreview()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="itemRules['+i+'].fileKeyword=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="itemRules['+i+'].label=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
       +'<td><button class="btn-del-row" onclick="itemRules.splice('+i+',1);renderItemTable()">×</button></td>'
       +'</tr>';
   }).join('');
@@ -3315,8 +3381,8 @@ function renderBroadcastTable(){
   var body=document.getElementById('bcastBody');if(!body)return;
   body.innerHTML=broadcastRules.map(function(r,i){
     return'<tr><td class="row-num">'+(i+1)+'</td>'
-      +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="broadcastRules['+i+'].channel=this.value;_liveRows=null;"></td>'
-      +'<td><input class="map-input" value="'+esc(r.type||'')+'" oninput="broadcastRules['+i+'].type=this.value;_liveRows=null;"></td>'
+      +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="broadcastRules['+i+'].channel=this.value;_liveRows=null;syncSettingsQuiet();"></td>'
+      +'<td><input class="map-input" value="'+esc(r.type||'')+'" oninput="broadcastRules['+i+'].type=this.value;_liveRows=null;syncSettingsQuiet();"></td>'
       +'<td><button class="btn-del-row" onclick="broadcastRules.splice('+i+',1);renderBroadcastTable()">×</button></td>'
       +'</tr>';
   }).join('');
@@ -6622,7 +6688,7 @@ function _renderAnalysisTable(){
   // ── Color bar ──
   var colorBarHtml='<div class="an-color-bar" id="anColorBar"><span style="font-size:.72rem;font-weight:700;color:#333;margin-right:8px">품목 색상:</span>';
   itemList.forEach(function(item){
-    colorBarHtml+='<label><input type="color" value="'+window._anItemColors[item]+'" onchange="window._anItemColors[\''+esc(item).replace(/'/g,"\\'")+'\'] = this.value; _renderAnalysisTable()"><span style="font-size:.68rem">'+esc(item)+'</span></label>';
+    colorBarHtml+='<label><input type="color" value="'+window._anItemColors[item]+'" onchange="window._anItemColors[\''+esc(item).replace(/'/g,"\\'")+'\'] = this.value; _renderAnalysisTable(); syncSettingsQuiet()"><span style="font-size:.68rem">'+esc(item)+'</span></label>';
   });
   colorBarHtml+='<button onclick="_openAnColorPicker()" style="margin-left:10px;padding:2px 10px;font-size:.66rem;background:#fff;border:1px solid #aaa;border-radius:4px;cursor:pointer;font-weight:600">색상 설정</button>';
   colorBarHtml+='</div>';
@@ -8027,10 +8093,10 @@ function _initCprpOnSettingsOpen(){
   if(spBody){
     spBody.innerHTML=mappingRules.map(function(r,i){
       return'<tr><td class="row-num">'+(i+1)+'</td>'
-        +'<td><input class="map-input" value="'+esc(r.fileIncludes||'')+'" oninput="mappingRules['+i+'].fileIncludes=this.value;_liveRows=null;renderLivePreview()"></td>'
-        +'<td><input class="map-input" value="'+esc(r.sheetIncludes||'')+'" oninput="mappingRules['+i+'].sheetIncludes=this.value;_liveRows=null;renderLivePreview()"></td>'
-        +'<td><input class="map-input" value="'+esc(r.pp||'')+'" oninput="mappingRules['+i+'].pp=this.value;_liveRows=null;renderLivePreview()"></td>'
-        +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="mappingRules['+i+'].channel=this.value;_liveRows=null;renderLivePreview()"></td>'
+        +'<td><input class="map-input" value="'+esc(r.fileIncludes||'')+'" oninput="mappingRules['+i+'].fileIncludes=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
+        +'<td><input class="map-input" value="'+esc(r.sheetIncludes||'')+'" oninput="mappingRules['+i+'].sheetIncludes=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
+        +'<td><input class="map-input" value="'+esc(r.pp||'')+'" oninput="mappingRules['+i+'].pp=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
+        +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="mappingRules['+i+'].channel=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
         +'<td><button class="btn-del-row" onclick="mappingRules.splice('+i+',1);_initCprpOnSettingsOpen()">x</button></td>'
         +'</tr>';
     }).join('');
@@ -8040,8 +8106,8 @@ function _initCprpOnSettingsOpen(){
   if(spSoaked){
     spSoaked.innerHTML=soakedRules.map(function(r,i){
       return'<tr><td class="row-num">'+(i+1)+'</td>'
-        +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="soakedRules['+i+'].fileKeyword=this.value;_liveRows=null;renderLivePreview()"></td>'
-        +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="soakedRules['+i+'].label=this.value;_liveRows=null;renderLivePreview()"></td>'
+        +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="soakedRules['+i+'].fileKeyword=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
+        +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="soakedRules['+i+'].label=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
         +'<td><button class="btn-del-row" onclick="soakedRules.splice('+i+',1);_initCprpOnSettingsOpen()">x</button></td>'
         +'</tr>';
     }).join('');
@@ -8558,7 +8624,7 @@ function _fbUpdateUI(){
     var camp=window._fbCampName?(' · '+esc(window._fbCampName)):'';
     el.innerHTML=
       '<button class="tbr-btn" onclick="openCampaignManager()" title="캠페인 생성 · 복제 · 열기 · 삭제 (구글 계정 저장)" style="font-weight:700">📁 캠페인 관리<span id="fbTopSave" style="font-size:.62rem;margin-left:5px"></span></button>'
-      +'<span style="font-size:.66rem;color:rgba(255,255,255,.75);white-space:nowrap;max-width:230px;overflow:hidden;text-overflow:ellipsis">'+nm+'님 환영합니다.'+camp+'</span>'
+      +'<span style="font-size:.68rem;color:#555;font-weight:600;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis">'+nm+'님 환영합니다.'+camp+'</span>'
       +'<button class="tbr-btn" onclick="fbLogout()" title="로그아웃">로그아웃</button>';
     try{_fbRefreshSaveLabel();}catch(e){}
   } else {
@@ -8646,15 +8712,24 @@ function openCampaignManager(){
   var pop=document.createElement('div'); pop.id='fbCampPop';
   pop.style.cssText='position:fixed;top:64px;right:18px;z-index:10001;background:#fff;border:1px solid #c8c8c8;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.28);padding:15px;width:380px;max-height:82vh;overflow:auto;font-size:.75rem;color:#222;font-family:"Noto Sans KR",sans-serif';
   pop.innerHTML='<div style="font-weight:800;font-size:.86rem;margin-bottom:3px">📁 캠페인 관리<span style="float:right;cursor:pointer;color:#aaa;font-weight:400" onclick="document.getElementById(\'fbCampPop\').remove()">✕</span></div>'
-    +'<div style="font-size:.65rem;color:#888;margin-bottom:10px">캠페인 1개 = 기존 JSON 파일 1개. <b>저장 버튼을 눌러야</b> 클라우드에 기록됩니다.</div>'
-    +'<div style="display:flex;align-items:center;gap:8px;background:#f5f8fb;border:1px solid #e0e6ec;border-radius:8px;padding:7px 10px;margin-bottom:10px">'
-      +'<button onclick="fbSaveCampaign()" style="padding:5px 13px;border:none;border-radius:6px;background:#1d7a46;color:#fff;font-weight:700;cursor:pointer;font-size:.7rem">☁ 저장</button>'
-      +'<span id="fbSaveStatus" style="font-size:.66rem;color:#7a7a7a"></span></div>'
-    +'<div style="display:flex;gap:6px;margin-bottom:10px"><input id="fbNewCamp" placeholder="새 캠페인 이름" onkeydown="if(event.key===\'Enter\')fbCreateCampaign()" style="flex:1;padding:6px 9px;border:1px solid #ccc;border-radius:6px;font-size:.72rem"><button onclick="fbCreateCampaign()" style="padding:6px 13px;border:none;border-radius:6px;background:#0068b5;color:#fff;font-weight:700;cursor:pointer;font-size:.7rem">＋ 생성</button></div>'
+    +'<div style="font-size:.65rem;color:#888;margin-bottom:9px">캠페인 1개 = 기존 JSON 파일 1개. <b>저장 버튼을 눌러야</b> 클라우드에 기록됩니다.</div>'
+    +'<div style="margin-bottom:9px"><button id="fbNewToggle" onclick="fbToggleNewCamp(true)" style="padding:6px 13px;border:none;border-radius:6px;background:#0068b5;color:#fff;font-weight:700;cursor:pointer;font-size:.7rem">＋ 캠페인 생성</button>'
+      +'<div id="fbNewBox" style="display:none;gap:6px;margin-top:7px">'
+        +'<input id="fbNewCamp" placeholder="새 캠페인 이름" onkeydown="if(event.key===\'Enter\')fbCreateCampaign(); if(event.key===\'Escape\')fbToggleNewCamp(false)" style="flex:1;padding:6px 9px;border:1px solid #ccc;border-radius:6px;font-size:.72rem">'
+        +'<button onclick="fbCreateCampaign()" style="padding:6px 13px;border:none;border-radius:6px;background:#0068b5;color:#fff;font-weight:700;cursor:pointer;font-size:.7rem">만들기</button>'
+        +'<button onclick="fbToggleNewCamp(false)" style="padding:6px 10px;border:1px solid #ccc;border-radius:6px;background:#fff;color:#666;cursor:pointer;font-size:.7rem">취소</button>'
+      +'</div></div>'
     +'<div id="fbCampList" style="border-top:1px solid #eee;padding-top:8px;color:#999">불러오는 중…</div>';
   document.body.appendChild(pop);
   _fbRefreshSaveLabel();
   _fbRenderCampList();
+}
+function fbToggleNewCamp(on){
+  var box=document.getElementById('fbNewBox'), btn=document.getElementById('fbNewToggle');
+  if(!box)return;
+  box.style.display=on?'flex':'none';
+  if(btn)btn.style.display=on?'none':'';
+  if(on){ var i=document.getElementById('fbNewCamp'); if(i){i.value='';i.focus();} }
 }
 function _fbRenderCampList(){
   var box=document.getElementById('fbCampList'); if(!box)return;
@@ -8664,13 +8739,16 @@ function _fbRenderCampList(){
     qs.forEach(function(doc){ var d=doc.data(); var cur=(doc.id===window._fbCurrentCampaign);
       h+='<div style="display:flex;align-items:center;gap:6px;padding:7px 6px;border-radius:7px;margin-bottom:3px;border:1px solid '+(cur?'#8bb8e8':'transparent')+';background:'+(cur?'#eaf3fd':'transparent')+'">'
         +'<div style="flex:1;min-width:0"><b style="font-size:.75rem">'+esc(d.name||doc.id)+'</b>'+(cur?' <span style="color:#0068b5;font-size:.6rem;font-weight:700">● 편집 중</span>':'')
-        +'<br><span style="color:#aaa;font-size:.6rem">'+(d.updatedAt?new Date(d.updatedAt).toLocaleString():'')+(d.rowCount?(' · '+d.rowCount+'행'):'')+'</span></div>'
-        +(cur?'':'<button onclick="fbLoadCampaign(\''+doc.id+'\')" style="font-size:.64rem;padding:4px 9px;border:1px solid #8ab;border-radius:5px;background:#eef6ff;color:#0068b5;cursor:pointer;font-weight:700">열기</button>')
+        +'<br><span style="color:#aaa;font-size:.6rem">'+(d.updatedAt?new Date(d.updatedAt).toLocaleString():'')+(d.rowCount?(' · '+d.rowCount+'행'):'')+'</span>'
+        +(cur?'<br><span id="fbSaveStatus" style="font-size:.62rem;color:#7a7a7a"></span>':'')+'</div>'
+        +(cur?'<button onclick="fbSaveCampaign()" title="현재 편집 내용을 이 캠페인에 저장합니다" style="font-size:.64rem;padding:4px 10px;border:none;border-radius:5px;background:#1d7a46;color:#fff;cursor:pointer;font-weight:700">☁ 저장</button>'
+             :'<button onclick="fbLoadCampaign(\''+doc.id+'\')" style="font-size:.64rem;padding:4px 9px;border:1px solid #8ab;border-radius:5px;background:#eef6ff;color:#0068b5;cursor:pointer;font-weight:700">열기</button>')
         +'<button onclick="fbDuplicateCampaign(\''+doc.id+'\')" title="이 캠페인을 복제합니다" style="font-size:.64rem;padding:4px 8px;border:1px solid #bbb;border-radius:5px;background:#fff;color:#555;cursor:pointer">복제</button>'
         +'<button onclick="fbDeleteCampaign(\''+doc.id+'\',\''+esc((d.name||'').replace(/\'/g,''))+'\')" style="font-size:.64rem;padding:4px 8px;border:1px solid #e6c0c0;border-radius:5px;background:#fff;color:#c0392b;cursor:pointer">삭제</button>'
         +'</div>';
     });
     box.innerHTML=h;
+    try{_fbRefreshSaveLabel();}catch(e){}
   }).catch(function(e){ box.innerHTML='<div style="color:#c33">목록 오류: '+esc(e.message)+'</div>'; });
 }
 function fbCreateCampaign(){
@@ -8679,6 +8757,7 @@ function fbCreateCampaign(){
   /* 빈 캠페인만 만들고, 현재 편집 중인 캠페인은 그대로 둔다(자동 이동 없음) */
   _fbCampCol().add({name:nm,liveRows:'[]',rowCount:0,viewState:null,updatedAt:Date.now()}).then(function(ref){
     if(inp)inp.value='';
+    fbToggleNewCamp(false);
     _fbRenderCampList();
     showSaveToast&&showSaveToast('빈 캠페인 생성: '+nm+' (목록에서 [열기]를 눌러 이동)');
   }).catch(function(e){alert('생성 실패: '+e.message);});

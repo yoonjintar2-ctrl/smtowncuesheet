@@ -2775,6 +2775,7 @@ function _pivotCfgInit(){
   if(!c.valOrder||typeof c.valOrder!=='object')c.valOrder={};
   if(c.pctDigits==null)c.pctDigits=0;
   if(typeof c.hideEmptyRows!=='boolean')c.hideEmptyRows=false;
+  if(typeof c.ignoreBonbang!=='boolean')c.ignoreBonbang=false;   /* 요약에서 본방/재방 합쳐 보기 */
   if(typeof c.hideEmptyCols!=='boolean')c.hideEmptyCols=false;
   c.sorts=c.sorts.slice(0,3).filter(function(x){return x&&x.key;});
   /* ── 구버전 cfg 마이그레이션 → blocks 구조 ── */
@@ -2813,6 +2814,7 @@ function _pvTextColor(bg){ var m=/#?([0-9a-fA-F]{6})/.exec(bg||''); if(!m)return
 /* 열/행 머리글에 보여줄 값 표기 (본방여부·주차 등 코드값을 사람이 읽는 말로) */
 function _pvDispVal(col,v){
   var s=String(v==null?'':v).trim();
+  if(col===2&&_pivotCfgInit().ignoreBonbang)s=s.replace(/\s*<본방>\s*$/,'');   /* 본방/재방 구분 없이 합치기 */
   if(col===41)return (s==='1'||s==='본방')?'본방':(s===''?'':'재방');
   if(col===34){ if(s==='')return ''; return /주차$/.test(s)?s:(s+'주차'); }
   if(col===19||col===20||col===21)return _pvMD(s);   /* 시작일자·종료일자·집행일 → M/D */
@@ -3308,6 +3310,7 @@ function _pvRenderAdvPop(){
   h+='</span></div>';
   h+='<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer"><input type="checkbox" onchange="pivotSet(\'hideEmptyRows\',this.checked)"'+(cfg.hideEmptyRows?' checked':'')+'>값이 없는 <b>행</b> 숨기기</label>';
   h+='<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" onchange="pivotSet(\'hideEmptyCols\',this.checked)"'+(cfg.hideEmptyCols?' checked':'')+'>값이 없는 <b>열</b> 숨기기</label>';
+  h+='<label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px" title="프로그램명 뒤의 &lt;본방&gt; 표시를 무시하고 같은 프로그램으로 묶습니다"><input type="checkbox" onchange="pivotSet(\'ignoreBonbang\',this.checked)"'+(cfg.ignoreBonbang?' checked':'')+'>프로그램명의 <b>&lt;본방&gt;</b> 무시하고 합치기</label>';
 
   /* 정렬 */
   h+=_pvAdvSec('행 정렬 <span style="font-weight:400;color:#999;font-size:.62rem">· 날짜는 빠른/느린 순</span>');

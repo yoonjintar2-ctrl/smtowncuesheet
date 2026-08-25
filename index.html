@@ -4,6 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Q-Mate - 방송사 큐시트 관리 사이트</title>
+<script>
+/* ═══ 시작 오류 수집기 (2026-08-25) ═══
+   예전에는 스크립트가 어디서든 한 번 죽으면 mainApp이 display:none인 채로 남아
+   "아무 메시지 없는 완전한 백지"가 됐다. 여기서 오류를 모아 두고,
+   본문 뒤의 안전망 스크립트가 화면과 안내 배너를 반드시 띄운다. */
+window.__qmErrors=[];      /* 실제 스크립트 오류 */
+window.__qmAssetFails=[];  /* CDN 등 외부 파일 로드 실패 */
+window.addEventListener('error',function(ev){
+  try{
+    if(!ev)return;
+    /* <script>/<img> 로드 실패는 message가 없고 target이 DOM 노드다 → 별도로 기록 */
+    if(ev.target&&ev.target!==window&&ev.target.nodeName){
+      window.__qmAssetFails.push(String(ev.target.src||ev.target.href||ev.target.nodeName));
+      return;
+    }
+    if(!ev.message)return;
+    window.__qmErrors.push({msg:ev.message,src:((ev.filename||'').split('/').pop())+':'+(ev.lineno||0)});
+  }catch(e){}
+},true);
+window.addEventListener('unhandledrejection',function(ev){
+  try{ var r=ev&&ev.reason; window.__qmErrors.push({msg:'Promise: '+((r&&r.message)||r),src:''}); }catch(e){}
+});
+/* 저장된 설정이 깨져서 안 열릴 때 원격으로 복구시키는 탈출구:
+   주소 뒤에 ?reset=1(설정만) 또는 ?reset=all(설정+데이터) 을 붙여 접속 */
+(function(){
+  try{
+    var q=String(location.search||'');
+    var m=q.match(/[?&]reset=([a-z0-9]+)/i);
+    if(!m)return;
+    localStorage.removeItem('cusheet_rules_v1');
+    if(m[1].toLowerCase()==='all'){
+      localStorage.removeItem('cusheet_autosave_v1');
+      localStorage.removeItem('cusheet_autosave_bak_v1');
+      localStorage.removeItem('cusheet_onboarding_v1');
+    }
+    window.__qmDidReset=m[1].toLowerCase();
+  }catch(e){}
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
@@ -1173,6 +1212,45 @@ function normCM(v){
 ═══════════════════════════════════ */
 var mappingRules, soakedRules, itemRules, broadcastRules, ppOrderList, longNameRules;
 
+/* ═══ 저장된 설정 정합성 검사 (2026-08-25) ═══
+   localStorage·JSON·구글 계정에서 온 설정 중 형태가 깨진 항목을 버린다.
+   예전에는 soakedRules가 배열이 아니거나 배열 안에 null이 하나만 있어도
+   loadRules에서 예외가 나고 **스크립트 전체가 멈춰 화면이 백지**가 됐다. */
+function _qmSanitizeSettings(saved){
+  if(!saved||typeof saved!=='object'||Array.isArray(saved))return {};
+  var dropped=[];
+  /* ① 객체들의 배열이어야 하는 것 */
+  ['mappingRules','soakedRules','itemRules','broadcastRules','longNameRules','cmNormRules','_pivotTemplates'].forEach(function(k){
+    if(!(k in saved))return;
+    var v=saved[k];
+    if(!Array.isArray(v)){ delete saved[k]; dropped.push(k); return; }
+    var clean=v.filter(function(r){ return r&&typeof r==='object'&&!Array.isArray(r); });
+    if(clean.length!==v.length)dropped.push(k+'(일부 행)');
+    if(clean.length)saved[k]=clean; else { delete saved[k]; dropped.push(k); }
+  });
+  /* ② 문자열 배열 */
+  if('ppOrderList' in saved){
+    if(!Array.isArray(saved.ppOrderList)){ delete saved.ppOrderList; dropped.push('ppOrderList'); }
+    else { saved.ppOrderList=saved.ppOrderList.filter(function(x){return typeof x==='string'&&x;});
+           if(!saved.ppOrderList.length){ delete saved.ppOrderList; } }
+  }
+  /* ③ 숫자 배열 */
+  if('_colConfig' in saved){
+    if(!Array.isArray(saved._colConfig)){ delete saved._colConfig; dropped.push('_colConfig'); }
+    else { saved._colConfig=saved._colConfig.filter(function(x){return typeof x==='number'&&isFinite(x);});
+           if(!saved._colConfig.length){ delete saved._colConfig; } }
+  }
+  /* ④ 평범한 객체여야 하는 것 */
+  ['progNameMap','bonbangChecked','_anItemColors','_anAnalysisOptions','_pivotCfg','_anRowOrder','_calChOrder'].forEach(function(k){
+    if(!(k in saved))return;
+    var v=saved[k];
+    if(k==='_anRowOrder'||k==='_calChOrder'){ if(v!=null&&!Array.isArray(v)){ delete saved[k]; dropped.push(k); } return; }
+    if(!v||typeof v!=='object'||Array.isArray(v)){ delete saved[k]; dropped.push(k); }
+  });
+  if(dropped.length&&typeof console!=='undefined')console.warn('[Q-Mate] 저장된 설정 중 형태가 잘못된 항목을 건너뜁니다:',dropped.join(', '));
+  return saved;
+}
+
 function loadRules(){
   var saved={};
   try{
@@ -1187,6 +1265,7 @@ function loadRules(){
     var embeddedHasContent=embedded&&Object.keys(embedded).length>0;
     saved=embeddedHasContent?embedded:lsSaved;
   }catch(e){}
+  saved=_qmSanitizeSettings(saved);   /* 깨진 설정 방어 — 아래 로직이 배열·객체를 전제로 함 */
   mappingRules=saved.mappingRules||DEFAULT_MAPPING_RULES.map(function(r){return Object.assign({},r);});
   // Ensure all DEFAULT_MAPPING_RULES entries exist (add missing ones like YTN)
   DEFAULT_MAPPING_RULES.forEach(function(def){
@@ -7683,7 +7762,7 @@ function _restoreFromPayload(payload){
   // 버전 호환: 최상위가 배열(구버전 저장형식)이면 files 목록으로 간주
   if(Array.isArray(payload))payload={files:payload};
   var restored=false;
-  if(payload.settings){ try{ localStorage.setItem('cusheet_rules_v1',JSON.stringify(payload.settings)); }catch(e){} try{ var _s=payload.settings; if(_s.mappingRules)mappingRules=_s.mappingRules; if(_s.soakedRules)soakedRules=_s.soakedRules; if(_s.itemRules)itemRules=_s.itemRules; if(_s.broadcastRules)broadcastRules=_s.broadcastRules; if(_s.ppOrderList)ppOrderList=_s.ppOrderList; if(_s.longNameRules)longNameRules=_s.longNameRules; if(_s.cmNormRules)cmNormRules=_s.cmNormRules; if(_s.progNameMap)Object.assign(progNameMap,_s.progNameMap); if(_s.bonbangChecked)Object.assign(bonbangChecked,_s.bonbangChecked); if(Array.isArray(_s._colConfig))_colConfig=_s._colConfig; if(_s._anItemColors)window._anItemColors=_s._anItemColors; if(_s._anRowOrder)window._anRowOrderSaved=_s._anRowOrder; if(_s._calChOrder)window._calChOrder=_s._calChOrder; if(_s._calSortMode)window._calSortMode=_s._calSortMode; if(_s._pivotTemplates)window._pivotTemplates=_s._pivotTemplates; if(_s._pivotCfg)window._pivotCfg=_s._pivotCfg; if(_s._anAnalysisOptions)window._anAnalysisOptions=_s._anAnalysisOptions; window._mapOrderManual=!!_s._mapOrderManual; window._soakedOrderManual=!!_s._soakedOrderManual; }catch(e){ console.warn('restore settings',e); } }
+  if(payload.settings){ try{ payload.settings=_qmSanitizeSettings(payload.settings); }catch(e){} try{ localStorage.setItem('cusheet_rules_v1',JSON.stringify(payload.settings)); }catch(e){} try{ var _s=payload.settings; if(_s.mappingRules)mappingRules=_s.mappingRules; if(_s.soakedRules)soakedRules=_s.soakedRules; if(_s.itemRules)itemRules=_s.itemRules; if(_s.broadcastRules)broadcastRules=_s.broadcastRules; if(_s.ppOrderList)ppOrderList=_s.ppOrderList; if(_s.longNameRules)longNameRules=_s.longNameRules; if(_s.cmNormRules)cmNormRules=_s.cmNormRules; if(_s.progNameMap)Object.assign(progNameMap,_s.progNameMap); if(_s.bonbangChecked)Object.assign(bonbangChecked,_s.bonbangChecked); if(Array.isArray(_s._colConfig))_colConfig=_s._colConfig; if(_s._anItemColors)window._anItemColors=_s._anItemColors; if(_s._anRowOrder)window._anRowOrderSaved=_s._anRowOrder; if(_s._calChOrder)window._calChOrder=_s._calChOrder; if(_s._calSortMode)window._calSortMode=_s._calSortMode; if(_s._pivotTemplates)window._pivotTemplates=_s._pivotTemplates; if(_s._pivotCfg)window._pivotCfg=_s._pivotCfg; if(_s._anAnalysisOptions)window._anAnalysisOptions=_s._anAnalysisOptions; window._mapOrderManual=!!_s._mapOrderManual; window._soakedOrderManual=!!_s._soakedOrderManual; }catch(e){ console.warn('restore settings',e); } }
   try{
     if(Array.isArray(payload.files)&&payload.files.length){
       files=[];
@@ -10149,17 +10228,90 @@ function _initSummaryDrag(){
 
 var _origMergeFiles=mergeFiles;
 
-loadRules();
-renderMapTable();
-renderProgNameMapTable();
-updateBtn();
-_initDropzone();
+/* 시작 단계는 하나가 실패해도 나머지가 계속 돌도록 개별로 감싼다(백지 방지) */
+['loadRules','renderMapTable','renderProgNameMapTable','updateBtn','_initDropzone'].forEach(function(_fn){
+  try{ window[_fn](); }
+  catch(_e){
+    try{ console.error('[Q-Mate 시작 오류] '+_fn,_e); }catch(_x){}
+    try{ (window.__qmErrors=window.__qmErrors||[]).push({msg:_fn+'(): '+((_e&&_e.message)||_e),src:'startup'}); }catch(_x){}
+  }
+});
 try{(function(){var sm=document.getElementById('setupModal');if(sm)sm.style.display='none';var ma=document.getElementById('mainApp');if(ma)ma.style.display='flex';var ps=document.getElementById('previewSection');if(ps)ps.style.display='flex';var bb=document.getElementById('bannerBar');if(bb)bb.style.display='';})();}catch(e){console.warn('startup',e);}
 try{ _offerAutoRestore(); }catch(e){ console.warn('offerRestore',e); }
+window.__qmBooted=true;   /* 여기까지 왔으면 본문 스크립트가 끝까지 실행된 것 */
 // 자동 복원은 하지 않고, 이전 데이터가 있으면 하단 안내바로 복원 여부를 물어본다(2026-08-25)
 </script>
 
 
+
+<script>
+/* ═══ 안전망 (2026-08-25) ═══
+   위 본문 스크립트가 문법 오류·시작 오류로 죽더라도 이 블록은 별도 <script>라 실행된다.
+   ① 숨겨져 있던 화면을 강제로 띄우고 ② 무엇이 잘못됐는지 배너로 알려 준다.
+   (예전에는 이 경우 아무 메시지 없는 완전한 백지가 됐다) */
+(function(){
+  function el(id){ return document.getElementById(id); }
+  function forceShow(){
+    try{
+      var sm=el('setupModal'); if(sm)sm.style.display='none';
+      var ma=el('mainApp');
+      if(ma&&getComputedStyle(ma).display==='none')ma.style.display='flex';
+      var ps=el('previewSection'); if(ps)ps.style.display='flex';
+    }catch(e){}
+  }
+  function banner(){
+    var errs=(window.__qmErrors||[]);
+    if(window.__qmBooted&&!errs.length)return;      /* 정상 부팅 */
+    if(el('qmBootBanner'))return;
+    var first=errs.length?errs[0]:null;
+    var d=document.createElement('div');
+    d.id='qmBootBanner';
+    d.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;background:#7f1d1d;color:#fff;'
+      +'padding:12px 16px;font-size:.8rem;line-height:1.6;font-family:system-ui,\'Malgun Gothic\',sans-serif;'
+      +'box-shadow:0 3px 14px rgba(0,0,0,.3)';
+    var msg=first?(first.msg+(first.src?('  ('+first.src+')'):'')):'알 수 없는 오류';
+    d.innerHTML='<b>프로그램을 여는 중 문제가 발생했습니다.</b>'
+      +'<div style="margin:5px 0 9px;opacity:.85;word-break:break-all;font-size:.74rem">'
+      +String(msg).replace(/</g,'&lt;')+'</div>'
+      +'<button id="qmFixSettings" style="margin-right:6px;padding:5px 12px;border:none;border-radius:5px;background:#fff;color:#7f1d1d;font-weight:700;cursor:pointer">설정만 초기화하고 다시 열기</button>'
+      +'<button id="qmFixAll" style="margin-right:6px;padding:5px 12px;border:1px solid rgba(255,255,255,.5);border-radius:5px;background:transparent;color:#fff;cursor:pointer">설정+저장데이터 모두 초기화</button>'
+      +'<button id="qmFixClose" style="padding:5px 10px;border:1px solid rgba(255,255,255,.35);border-radius:5px;background:transparent;color:#fff;cursor:pointer">닫기</button>'
+      +'<div style="margin-top:7px;font-size:.68rem;opacity:.75">이 컴퓨터에 저장된 설정이 깨졌을 때 잘 생깁니다. 주소 끝에 <b>?reset=1</b> 을 붙여 접속해도 같은 효과입니다.</div>';
+    document.body.appendChild(d);
+    var pad=d.offsetHeight+8;
+    try{ document.body.style.paddingTop=pad+'px'; }catch(e){}
+    el('qmFixSettings').onclick=function(){ try{ localStorage.removeItem('cusheet_rules_v1'); }catch(e){} location.href=location.pathname+'?reset=1'; };
+    el('qmFixAll').onclick=function(){
+      if(!confirm('이 컴퓨터에 저장된 설정과 작업 데이터를 모두 지우고 처음 상태로 엽니다.\n계속할까요?'))return;
+      location.href=location.pathname+'?reset=all';
+    };
+    el('qmFixClose').onclick=function(){ try{ document.body.style.paddingTop=''; }catch(e){} d.remove(); };
+  }
+  function assetNotice(){
+    try{
+      if(el('qmAssetBar'))return;
+      if(typeof XLSX!=='undefined')return;            /* 엑셀 모듈이 살아 있으면 안내 불필요 */
+      var d=document.createElement('div');
+      d.id='qmAssetBar';
+      d.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:99998;background:#78350f;color:#fff;'
+        +'padding:9px 14px;font-size:.74rem;line-height:1.5;font-family:system-ui,\'Malgun Gothic\',sans-serif';
+      d.innerHTML='<b>엑셀 모듈(SheetJS)을 불러오지 못했습니다.</b> 큐시트 업로드와 엑셀 다운로드가 동작하지 않습니다. '
+        +'사내망/보안 프로그램이 <span style="opacity:.85">cdnjs.cloudflare.com</span> 을 막고 있을 수 있습니다. '
+        +'<button onclick="location.reload()" style="margin-left:8px;padding:3px 10px;border:none;border-radius:4px;background:#fff;color:#78350f;font-weight:700;cursor:pointer">새로고침</button>'
+        +'<button onclick="this.parentNode.remove()" style="margin-left:5px;padding:3px 9px;border:1px solid rgba(255,255,255,.4);border-radius:4px;background:transparent;color:#fff;cursor:pointer">닫기</button>';
+      document.body.appendChild(d);
+    }catch(e){}
+  }
+  function run(){ forceShow(); banner(); assetNotice();
+    if(window.__qmDidReset&&typeof window.showSaveToast==='function'){
+      try{ showSaveToast(window.__qmDidReset==='all'?'설정과 저장 데이터를 초기화했습니다.':'설정을 초기화했습니다.'); }catch(e){}
+    }
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){ setTimeout(run,0); });
+  else setTimeout(run,0);
+  setTimeout(run,1200);   /* 늦게 터지는 오류도 한 번 더 확인 */
+})();
+</script>
 
 <!-- ═══════════ Firebase (구글 로그인 + Firestore 캠페인) ═══════════ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -10274,7 +10426,7 @@ function _fbSaveSettings(){ if(!window._fbUser||!window._fbDb)return; try{ var s
 function _fbOnLogin(){
   if(!window._fbDb)return;
   _fbUserDoc().get().then(function(d){
-    if(d.exists&&d.data().settings){ try{ localStorage.setItem('cusheet_rules_v1',JSON.stringify(d.data().settings)); if(typeof loadRules==='function')loadRules(); if(typeof renderLivePreview==='function')renderLivePreview(); if(typeof renderCalendarTab==='function')renderCalendarTab(); }catch(e){console.warn(e);} }
+    if(d.exists&&d.data().settings){ try{ var _fs=d.data().settings; if(typeof _qmSanitizeSettings==='function')_fs=_qmSanitizeSettings(_fs); localStorage.setItem('cusheet_rules_v1',JSON.stringify(_fs)); if(typeof loadRules==='function')loadRules(); if(typeof renderLivePreview==='function')renderLivePreview(); if(typeof renderCalendarTab==='function')renderCalendarTab(); }catch(e){console.warn(e);} }
   }).catch(function(e){console.warn('load settings',e);});
   showSaveToast&&showSaveToast('로그인됨 · 설정을 계정에서 불러왔습니다.');
 }

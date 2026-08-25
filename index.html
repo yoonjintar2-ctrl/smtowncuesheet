@@ -352,6 +352,10 @@ tr.pv-highlight-on td{background:rgba(251,191,36,.18)!important}
 .pv-prog-save:hover{background:#1a5c38}
 .pv-prog-cancel{font-size:.62rem;background:#888;color:#fff;border:none;border-radius:3px;padding:2px 6px;cursor:pointer}
 .pv-bonbang .pv-prog-text{color:#c00050;font-weight:600}
+.pv-saengbang .pv-prog-text{color:#0057a3;font-weight:600}
+.pv-teukjip .pv-prog-text{color:#9a5b00;font-weight:600}
+.pv-prog-edit.pv-saengbang{color:#0057a3;font-weight:600}
+.pv-prog-edit.pv-teukjip{color:#9a5b00;font-weight:600}
 
 .pv-tbl th{position:relative}
 .col-resizer{position:absolute;right:0;top:0;width:5px;height:100%;cursor:col-resize;z-index:3;user-select:none;background:transparent}
@@ -812,6 +816,7 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
         <div style="padding:12px 15px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-sm btn-add" onclick="importOnboardingJSON()" title="JSON 파일에서 작업 데이터 불러오기">JSON 파일 추가</button>
           <button class="btn-sm btn-add" onclick="manualSave()" title="현재 작업 데이터+설정을 JSON 파일로 저장">JSON 파일 저장</button>
+          <button class="btn-sm btn-add" onclick="openAutoBackups()" title="3분마다 자동 저장된 최근 5개 버전에서 되돌리기">⏱ 자동저장 백업</button>
         </div>
       </div>
     </div>
@@ -1072,13 +1077,25 @@ var DEFAULT_BROADCAST_RULES=[
   {channel:'채널A',type:'케이블/종편'},{channel:'MBN',type:'케이블/종편'},
 ];
 
+/* 기본 소재명 매핑 (2026-08-25 갱신) — 위→아래 첫 일치 적용이므로 순서 = 우선순위.
+   loadRules에서 이 목록을 항상 맨 위에 강제 배치하고, 사용자가 직접 만든 규칙은 그 아래로 내린다. */
 var DEFAULT_SOAKED_RULES=[
   {fileKeyword:'노블',label:'노블'},
   {fileKeyword:'페블',label:'페블'},
-  {fileKeyword:'얼음',label:'아이콘 얼음'},
+  {fileKeyword:'아이콘얼음',label:'아이콘 얼음'},
   {fileKeyword:'아이콘',label:'아이콘3'},
-  {fileKeyword:'매트리스',label:'스매'},
+  {fileKeyword:'스마트매트리스',label:'스매'},
   {fileKeyword:'페스타',label:'페스타'},
+  {fileKeyword:'비데',label:'비데'},
+  {fileKeyword:'스매',label:'스매'},
+  {fileKeyword:'카페얼음정수기',label:'카페 얼음정수기'},
+  {fileKeyword:'카페 얼음정수기',label:'카페 얼음정수기'},
+  {fileKeyword:'안마',label:'안마 매트리스'},
+  {fileKeyword:'음처기',label:'음처기'},
+  {fileKeyword:'음식물',label:'음처기'},
+  {fileKeyword:'스마트 매트리스',label:'스매'},
+  {fileKeyword:'아이콘 얼음',label:'아이콘 얼음'},
+  {fileKeyword:'얼음정수기',label:'아이콘 얼음'},
 ];
 
 var DEFAULT_PP_ORDER=['CJ ENM','JTBC 미디어컴','KT ENA','KBS','MBC','SBS','t.cast','iHQ','미디어에스','TV조선','미디어렙에이','MBN','SPOTV','연합뉴스TV'];
@@ -1178,8 +1195,29 @@ function loadRules(){
     });
     if(!exists)mappingRules.push(Object.assign({},def));
   });
-  (function(){ var u=[],dd=[]; mappingRules.forEach(function(r){ (_isDefaultMap(r)?dd:u).push(r); }); mappingRules=u.concat(dd); })();
+  /* 사용자가 ▲▼로 직접 정한 순서가 있으면 그대로 존중, 없을 때만 '개인 규칙 우선'으로 재정렬 */
+  window._mapOrderManual=!!saved._mapOrderManual;
+  if(!window._mapOrderManual){
+    (function(){ var u=[],dd=[]; mappingRules.forEach(function(r){ (_isDefaultMap(r)?dd:u).push(r); }); mappingRules=u.concat(dd); })();
+  }
   soakedRules=saved.soakedRules||DEFAULT_SOAKED_RULES.map(function(r){return Object.assign({},r);});
+  /* 기본 소재명 규칙은 접속하는 모든 사용자에게 동일하게 적용한다.
+     - 기본 목록에 있는 규칙은 항상 존재하고, 위쪽에 기본 순서 그대로 배치
+     - 사용자가 직접 추가/수정한 규칙은 그 아래로 몰아 넣는다
+     단, 사용자가 ▲▼로 순서를 직접 손봤으면(_soakedOrderManual) 그 순서를 존중하고
+     빠진 기본 규칙만 뒤에 덧붙인다. */
+  window._soakedOrderManual=!!saved._soakedOrderManual;
+  (function(){
+    var key=function(r){ return String((r&&r.fileKeyword)||'')+'\u0000'+String((r&&r.label)||''); };
+    var defKeys={}; DEFAULT_SOAKED_RULES.forEach(function(d){ defKeys[key(d)]=1; });
+    if(window._soakedOrderManual){
+      var have={}; soakedRules.forEach(function(r){ have[key(r)]=1; });
+      DEFAULT_SOAKED_RULES.forEach(function(d){ if(!have[key(d)])soakedRules.push({fileKeyword:d.fileKeyword,label:d.label}); });
+    } else {
+      var user=soakedRules.filter(function(r){ return !defKeys[key(r)]; });
+      soakedRules=DEFAULT_SOAKED_RULES.map(function(d){ return {fileKeyword:d.fileKeyword,label:d.label}; }).concat(user);
+    }
+  })();
   itemRules=saved.itemRules||DEFAULT_ITEM_RULES.map(function(r){return Object.assign({},r);});
   // Fix old key names if needed
   itemRules.forEach(function(r){if(r.keyword&&!r.fileKeyword){r.fileKeyword=r.keyword;delete r.keyword;}if(r.item&&!r.label){r.label=r.item;delete r.item;}});
@@ -1223,7 +1261,9 @@ function saveRulesToFile(quiet){
       _calSortMode:window._calSortMode||null,
       _pivotTemplates:window._pivotTemplates||[],
       _pivotCfg:window._pivotCfg||null,
-      _anAnalysisOptions:window._anAnalysisOptions||{}
+      _anAnalysisOptions:window._anAnalysisOptions||{},
+      _mapOrderManual:!!window._mapOrderManual,
+      _soakedOrderManual:!!window._soakedOrderManual
     };
     localStorage.setItem('cusheet_rules_v1',JSON.stringify(lsData));
     try{ if(window._fbUser&&typeof _fbSaveSettings==='function')_fbSaveSettings(); }catch(e){}
@@ -1271,6 +1311,83 @@ function getItemLabel(soaeName){
     if(r.fileKeyword&&s.indexOf(r.fileKeyword.normalize('NFC').toLowerCase())>=0)return r.label||'';
   }
   return'';
+}
+
+/* ═══════════════════════════════════
+   매핑 규칙 변경 → 이미 온보딩된 행에 소급 적용
+   각 행에 저장된 원본 파일명(55)·원본 시트명(57)으로 규칙을 다시 조회한다.
+   (구버전 데이터는 57이 비어 있어 시트명 조건이 있는 규칙은 매칭되지 않을 수 있음)
+═══════════════════════════════════ */
+function _reapplyMapsToRows(rows){
+  if(!rows||!rows.length)return 0;
+  var n=0;
+  var start=(Array.isArray(rows[0])&&String(rows[0][0])==='채널')?1:0;
+  for(var i=start;i<rows.length;i++){
+    var row=rows[i];
+    if(!row||!row.length)continue;
+    var fn=String(row[55]||'');
+    if(!fn)continue;                       /* 원본 파일명이 없으면 손대지 않음(수동 추가 행 보호) */
+    var sn=String(row[57]||'');
+    var changed=false;
+    /* ① 채널 / PP / 지상파·케이블 */
+    var pc=lookupPC(fn,sn);
+    if(pc.channel&&row[0]!==pc.channel){ row[0]=pc.channel; changed=true; }
+    if(pc.pp){ var ppv=getPPVal(pc.pp); if(row[33]!==ppv){ row[33]=ppv; changed=true; } }
+    var bt=getBroadcastType(row[0]);
+    if(row[29]!==bt){ row[29]=bt; changed=true; }
+    /* ② 품목(소재) / 품목 카테고리 / 품목 풀네임 */
+    var isT=(row[29]==='지상파');
+    var soae=isT?'미지정':getSoakedLabel(fn);
+    if(row[1]!==soae){ row[1]=soae; changed=true; }
+    var cat=isT?'':getItemLabel(soae);
+    if(row[28]!==cat){ row[28]=cat; changed=true; }
+    var ln=getLongName(soae);
+    if(row[43]!==ln){ row[43]=ln; changed=true; }
+    var disp=soae+' / '+(row[7]?row[7]+'초':'')+' / '+(row[8]||'');
+    if(row[36]!==disp){ row[36]=disp; changed=true; }
+    for(var w=44;w<=49;w++){                /* 1W~6W 라벨(해당 주차 칸에만 값이 있음) */
+      if(row[w]!==''&&row[w]!=null&&row[w]!==soae){ row[w]=soae; changed=true; }
+    }
+    if(changed)n++;
+  }
+  return n;
+}
+
+/* 매핑 표를 고쳤을 때 호출.
+   - 원본 엑셀이 아직 로드돼 있으면 전체 재빌드(가장 정확)
+   - 캠페인/JSON으로 불러온 스냅샷 행만 있으면 제자리 재매핑 */
+function applyMappingChange(){
+  try{ _reapplyMapsToRows(window._consolidatedRows); }catch(e){}
+  var hasFiles=false;
+  try{
+    hasFiles=files.some(function(f){
+      return f.status==='loaded'&&!f.isConsolidated&&f.sheets&&f.sheets.length&&((f.sheets[0]||{}).dataRows||[]).length;
+    });
+  }catch(e){}
+  if(hasFiles){ _liveRows=null; }
+  else { try{ _reapplyMapsToRows(_liveRows); }catch(e){} }
+  try{ syncSettingsQuiet(); }catch(e){}
+  try{ renderLivePreview(); }catch(e){}
+  try{ if(typeof updatePreviewFilters==='function')updatePreviewFilters(); }catch(e){}
+  try{ if(typeof renderCalendarTab==='function'){var _cp=document.getElementById('calendarPage'); if(_cp&&_cp.style.display!=='none')renderCalendarTab();} }catch(e){}
+  try{ if(typeof renderSummaryTab==='function'){var _sp=document.getElementById('summaryPage'); if(_sp&&_sp.style.display!=='none')renderSummaryTab();} }catch(e){}
+  try{ if(typeof _scheduleAutoSave==='function')_scheduleAutoSave(); }catch(e){}
+}
+
+/* 매핑 규칙 순서 바꾸기(위/아래) — 규칙은 first-match-wins라 순서가 곧 우선순위 */
+function ruleMove(which,i,dir){
+  var arr=(which==='map')?mappingRules:(which==='soaked')?soakedRules:(which==='item')?itemRules:null;
+  if(!arr)return;
+  var j=i+dir;
+  if(j<0||j>=arr.length)return;
+  var t=arr[i]; arr[i]=arr[j]; arr[j]=t;
+  if(which==='map')window._mapOrderManual=true;      /* 사용자가 직접 정한 순서를 로드 때 재정렬하지 않음 */
+  if(which==='soaked')window._soakedOrderManual=true;  /* 소재명 규칙도 동일 */
+  try{ if(which==='map'&&typeof renderPPChTable==='function')renderPPChTable(); }catch(e){}
+  try{ if(which==='soaked'&&typeof renderSoakedTable==='function')renderSoakedTable(); }catch(e){}
+  try{ if(which==='item'&&typeof renderItemTable==='function')renderItemTable(); }catch(e){}
+  try{ if(typeof _initCprpOnSettingsOpen==='function')_initCprpOnSettingsOpen(); }catch(e){}
+  applyMappingChange();
 }
 
 /* 규칙이 바뀌면 이미 만들어진 행의 '지상파/케이블 구분'(29열)을 다시 계산한다 */
@@ -1481,9 +1598,56 @@ var COL_WCH=[
   6,6,6,6,6,6,
   10, 8, 12, 20, 10, 26, 12
 ];
-var OUT_COLS=['채널','품목','프로그램','요일','시작시간','종료시간','시급','초수','CM위치','단가','횟수','월','화','수','목','금','토','일','날짜','시작일자','종료일자','집행일','1주','2주','3주','4주','5주','6주','품목 카테고리','지상파/케이블 구분','CM위치(보정값)','주중/주말','단가(서비스x)','PP','주차 구분(숫자)','주차 구분(날짜)','값 표시','정기물 여부','행 그룹 내 순서(석진 사용)','해당 그룹의 총 횟수(석진 사용)','해당 프로그램 15초 평단가(석진 사용)','본방여부','15초 단가 환산','품목 풀네임','1W','2W','3W','4W','5W','6W','금액','CM 순서','예산','소재','온보딩일','원본 파일명','CM위치(미보정)'];
+var OUT_COLS=['채널','품목','프로그램','요일','시작시간','종료시간','시급','초수','CM위치','단가','횟수','월','화','수','목','금','토','일','날짜','시작일자','종료일자','집행일','1주','2주','3주','4주','5주','6주','품목 카테고리','지상파/케이블 구분','CM위치(보정값)','주중/주말','단가(서비스x)','PP','주차 구분(숫자)','주차 구분(날짜)','값 표시','정기물 여부','행 그룹 내 순서(석진 사용)','해당 그룹의 총 횟수(석진 사용)','해당 프로그램 15초 평단가(석진 사용)','본방여부','15초 단가 환산','품목 풀네임','1W','2W','3W','4W','5W','6W','금액','CM 순서','예산','소재','온보딩일','원본 파일명','CM위치(미보정)','원본 시트명'];
 function _todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-var _HIDDEN_COLS=[28,30,32,37,38,39,40,43,44,45,46,47,48,49,50,51,52];
+var _HIDDEN_COLS=[28,30,32,37,38,39,40,43,44,45,46,47,48,49,50,51,52,57];
+
+/* ═══ 프로그램명 태그(<본방>·<생방>·<특집>) 공통 처리 ═══
+   방송사 큐시트마다 <본방> ［생방］ (특집) 처럼 표기가 제각각이라 한 번에 정규화하고,
+   화면에서는 태그별로 다른 색으로 강조한다. */
+var PROG_TAGS=['본방','생방','특집'];
+var PROG_TAG_COLORS={'본방':'#e0005a','생방':'#0068b5','특집':'#b45309'};
+var PROG_TAG_CLS={'본방':'bon','생방':'live','특집':'sp'};
+function _progNormTags(str){
+  if(str==null||str==='')return '';
+  var t=String(str).replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+  for(var i=0;i<PROG_TAGS.length;i++){
+    var tag=PROG_TAGS[i];
+    t=t.replace(new RegExp('[\uFF1C<\u3008\\[\u3010\u300C\u300E(\uFF08]\\s*'+tag+'\\s*[\uFF1E>\u3009\\]\u3011\u300D\u300F)\uFF09]','g'),'<'+tag+'>');
+  }
+  t=t.replace(/[\uFF1C<\u3008\[\u3010\u300C\u300E(\uFF08]\s*본\s*[\uFF1E>\u3009\]\u3011\u300D\u300F)\uFF09]/g,'<본방>');
+  return t;
+}
+function _progTags(name){
+  var t=String(name==null?'':name), out=[];
+  for(var i=0;i<PROG_TAGS.length;i++){ if(t.indexOf('<'+PROG_TAGS[i]+'>')>=0)out.push(PROG_TAGS[i]); }
+  return out;
+}
+function _progBase(name){ return String(name==null?'':name).replace(/\s*<(본방|생방|특집)>/g,'').replace(/\s+/g,' ').trim(); }
+function _progWithTags(base,tags){
+  base=String(base==null?'':base).trim();
+  if(!tags||!tags.length)return base;
+  var out=[];
+  for(var i=0;i<PROG_TAGS.length;i++){ if(tags.indexOf(PROG_TAGS[i])>=0)out.push('<'+PROG_TAGS[i]+'>'); }
+  return out.length?(base+' '+out.join(' ')):base;
+}
+function _progSetBonbang(name,on){
+  var tags=_progTags(name).filter(function(t){return t!=='본방';});
+  if(on)tags.push('본방');
+  return _progWithTags(_progBase(name),tags);
+}
+function _progTagHTML(tags){
+  if(!tags||!tags.length)return '';
+  return tags.map(function(t){
+    return '<span class="pv-tag pv-tag-'+PROG_TAG_CLS[t]+'" contenteditable="false" style="color:'+PROG_TAG_COLORS[t]+';font-weight:700;user-select:none"> &lt;'+t+'&gt;</span>';
+  }).join('');
+}
+function _progTagCls(tags){
+  if(!tags||!tags.length)return '';
+  if(tags.indexOf('본방')>=0)return ' pv-bonbang';
+  if(tags.indexOf('생방')>=0)return ' pv-saengbang';
+  return ' pv-teukjip';
+}
 
 var TM={
   date:{l:'날짜',c:'#22d3ee'},dayofmonth:{l:'일(DD)',c:'#06b6d4'},dayofweek:{l:'요일',c:'#60a5fa'},
@@ -2087,11 +2251,8 @@ function processRow(row,colInfo,fileName){
   // Normalize <본방> variants in program name (fullwidth brackets, HTML entities, etc)
   if(prog){
     // Handle HTML entities from XLSX parser
-    prog=prog.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
-    // Normalize various bracket styles around 본방
-    prog=prog.replace(/[＜<〈\[【「『]\s*본방\s*[＞>〉\]】」』]/g,'<본방>');
-    // Also handle (본방), （본방）
-    prog=prog.replace(/[(\（]\s*본방\s*[)\）]/g,'<본방>');
+    /* <본방>/<생방>/<특집> 표기 정규화(전각·대괄호·소괄호 등 모든 변형) */
+    prog=_progNormTags(prog);
     // Replace tilde with hyphen to avoid Excel errors
     prog=prog.replace(/~/g,'-');
   }
@@ -2234,7 +2395,7 @@ function buildPreviewNormRows(){
     var _fileRows=[];
     f.sheets.forEach(function(sh,_shIdx){
       if(_dupSheets[sh.name])return; // 동일 파일 내 중복 시트(동일 PP/채널+동일 데이터) 제외
-      if(sh.qmate){ var _qr=_qmSheetRows(sh); if(_qr)_qr.forEach(function(_q){ if(!_q[55])_q[55]=f.name; _fileRows.push({row:_q,sh:_shIdx});}); return; }   /* Q-Mate 내보낸 엑셀은 정규화 없이 그대로 */
+      if(sh.qmate){ var _qr=_qmSheetRows(sh); if(_qr)_qr.forEach(function(_q){ if(!_q[55])_q[55]=f.name; if(!_q[57])_q[57]=sh.name||''; _fileRows.push({row:_q,sh:_shIdx});}); return; }   /* Q-Mate 내보낸 엑셀은 정규화 없이 그대로 */
       var pc=lookupPC(f.name,sh.name);
       if(!pc.pp&&!pc.channel)return;
       if(!sh.colInfo||!sh.colInfo.types||!sh.dataRows)return;
@@ -2289,7 +2450,7 @@ function buildPreviewNormRows(){
         // 스포츠/균등분배 채널: 이미 중복 횟수 반영된 1방송=1행, 추가 반복 안함
         var _datesFromDOW=!p.date||_hasWDSports||_hasWDEvenDist;
         var _isDistributed=_hasWDSports||_hasWDEvenDist;
-        var _rawProgEarly=(p.prog||'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/[＜<〈\[【「『(\（]\s*본방\s*[＞>〉\]】」』)\）]/g,'<본방>').replace(/[＜<〈\[【「『(\（]\s*본\s*[＞>〉\]】」』)\）]/g,'<본방>');
+        var _rawProgEarly=_progNormTags(p.prog||'');
         var _isKBOLive=_isSportsMBC&&isKBOLiveProgram(applyProgMap(_rawProgEarly));
 
         allDates.forEach(function(dateISO){
@@ -2314,12 +2475,13 @@ function buildPreviewNormRows(){
           var _rawProg=p.prog||'';
           // Extra normalization for <본방> in case processRow didn't catch it
           _rawProg=_rawProg.replace(/&lt;/g,'<').replace(/&gt;/g,'>');
-          _rawProg=_rawProg.replace(/[＜<〈\[【「『(\（]\s*본방\s*[＞>〉\]】」』)\）]/g,'<본방>').replace(/[＜<〈\[【「『(\（]\s*본\s*[＞>〉\]】」』)\）]/g,'<본방>');
+          _rawProg=_progNormTags(_rawProg);
           var progNameRaw=applyProgMap(_rawProg);
-          var origHasBonbang=progNameRaw.indexOf('<본방>')>=0;
-          var progName=origHasBonbang?progNameRaw.replace(/\s*<본방>\s*/g,'').trim():progNameRaw;
+          var _oTags=_progTags(progNameRaw);
+          var origHasBonbang=_oTags.indexOf('본방')>=0;
+          var progName=_progBase(progNameRaw);
           var bonbangKey=pc.channel+'|'+progName+'|'+dow+'|'+stOver+'|'+etOver;
-          if(bonbangChecked[bonbangKey]||origHasBonbang)progName=progName+' <본방>';
+          progName=_progWithTags(progName,(bonbangChecked[bonbangKey]||origHasBonbang)?_oTags.concat(['본방']):_oTags);
           var soaeName=getSoakedLabel(f.name);
           if(isTerrestrial)soaeName='미지정';
           var cmNormed=normCM(p.cm);
@@ -2346,6 +2508,7 @@ function buildPreviewNormRows(){
           var reps=(allDates.length>1||_datesFromDOW)?1:Math.max(1,Math.round(p.cnt));
           baseRow[55]=f.name;
           baseRow[56]=String(p.cm==null?'':p.cm).trim();   /* CM위치(미보정) */
+          baseRow[57]=sh.name||'';                          /* 원본 시트명 — 매핑 재적용용 */
           for(var ri=0;ri<reps;ri++)_fileRows.push({row:baseRow.slice(),sh:_shIdx});
         }); // end allDates.forEach
       });
@@ -4208,16 +4371,30 @@ function renderPPChTable(){
   body.innerHTML='<tr><td colspan="6" style="padding:4px 8px;background:#f0f6ff;color:#0068b5;font-size:.68rem">ℹ️ <b>개인(사용자) 규칙이 기본 규칙보다 우선</b> 적용됩니다. 새 규칙은 맨 위(최우선)에 추가됩니다.</td></tr>'+mappingRules.map(function(r,i){
     var _b=_isDefaultMap(r)?'<span style="font-size:.58rem;color:#888;border:1px solid #ccc;border-radius:8px;padding:0 5px;white-space:nowrap">기본</span>':'<span style="font-size:.58rem;color:#0068b5;border:1px solid #9cf;border-radius:8px;padding:0 5px;background:#eef6ff;white-space:nowrap">개인 우선</span>';
     return'<tr><td class="row-num">'+(i+1)+'<br>'+_b+'</td>'
-      +'<td><input class="map-input" value="'+esc(r.fileIncludes||'')+'" oninput="mappingRules['+i+'].fileIncludes=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-      +'<td><input class="map-input" value="'+esc(r.sheetIncludes||'')+'" oninput="mappingRules['+i+'].sheetIncludes=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-      +'<td><input class="map-input" value="'+esc(r.pp||'')+'" oninput="mappingRules['+i+'].pp=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-      +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="mappingRules['+i+'].channel=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-      +'<td><button class="btn-del-row" onclick="mappingRules.splice('+i+',1);renderPPChTable()">×</button></td>'
+      +'<td><input class="map-input" value="'+esc(r.fileIncludes||'')+'" oninput="mappingRules['+i+'].fileIncludes=this.value;applyMappingChange()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.sheetIncludes||'')+'" oninput="mappingRules['+i+'].sheetIncludes=this.value;applyMappingChange()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.pp||'')+'" oninput="mappingRules['+i+'].pp=this.value;applyMappingChange()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="mappingRules['+i+'].channel=this.value;applyMappingChange()"></td>'
+      +'<td style="white-space:nowrap">'+_ruleOrderBtns('map',i,mappingRules.length)+'<button class="btn-del-row" onclick="mappingRules.splice('+i+',1);renderPPChTable();applyMappingChange()">×</button></td>'
       +'</tr>';
   }).join('');
 }
 function _isDefaultMap(r){ if(typeof DEFAULT_MAPPING_RULES==='undefined')return false; return DEFAULT_MAPPING_RULES.some(function(d){ return d.fileIncludes===r.fileIncludes&&(d.sheetIncludes||'')===(r.sheetIncludes||'')&&d.pp===r.pp&&d.channel===r.channel; }); }
-function addMapRow(){mappingRules.unshift({fileIncludes:'',sheetIncludes:'',pp:'',channel:''});_liveRows=null;renderPPChTable();if(typeof renderLivePreview==='function')renderLivePreview();}
+function addMapRow(){
+  mappingRules.unshift({fileIncludes:'',sheetIncludes:'',pp:'',channel:''});
+  window._mapOrderManual=true;
+  try{ renderPPChTable(); }catch(e){}
+  try{ if(typeof _initCprpOnSettingsOpen==='function')_initCprpOnSettingsOpen(); }catch(e){}
+  try{ if(typeof updateBadges==='function')updateBadges(); }catch(e){}
+  applyMappingChange();
+  setTimeout(function(){
+    var tb=document.getElementById('mapBodySp');
+    if(!tb||!tb.offsetParent)tb=document.getElementById('mapBody');
+    if(!tb)return;
+    var tr=tb.querySelector('tr td.row-num')?tb.querySelector('tr td.row-num').parentNode:null;
+    if(tr){ var inp=tr.querySelector('input'); if(inp)inp.focus(); }
+  },30);
+}
 
 function renderSoakedTable(){
   var body=document.getElementById('soakedBody');if(!body)return;
@@ -4225,25 +4402,58 @@ function renderSoakedTable(){
   if(preview)preview.textContent=soakedRules.map(function(r){return r.fileKeyword+'→'+r.label;}).join(' / ')||'규칙 없음';
   body.innerHTML=soakedRules.map(function(r,i){
     return'<tr><td class="row-num">'+(i+1)+'</td>'
-      +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="soakedRules['+i+'].fileKeyword=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-      +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="soakedRules['+i+'].label=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-      +'<td><button class="btn-del-row" onclick="soakedRules.splice('+i+',1);renderSoakedTable()">×</button></td>'
+      +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="soakedRules['+i+'].fileKeyword=this.value;applyMappingChange()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="soakedRules['+i+'].label=this.value;applyMappingChange()"></td>'
+      +'<td style="white-space:nowrap">'+_ruleOrderBtns('soaked',i,soakedRules.length)+'<button class="btn-del-row" onclick="soakedRules.splice('+i+',1);renderSoakedTable();applyMappingChange()">×</button></td>'
       +'</tr>';
   }).join('');
 }
-function addSoakedRow(){soakedRules.push({fileKeyword:'',label:''});renderSoakedTable();}
+/* 규칙 순서 이동 버튼(▲▼) — 표의 마지막 칸에 삭제 버튼과 함께 표시 */
+function _ruleOrderBtns(which,i,len){
+  var st='border:1px solid #ddd;background:#fff;border-radius:3px;cursor:pointer;font-size:.6rem;line-height:1;padding:2px 4px;margin-right:2px;color:#555';
+  var up='<button title="위로(우선순위 ↑)" style="'+st+(i<=0?';opacity:.25;cursor:default':'')+'" '+(i<=0?'disabled':'onclick="ruleMove(\''+which+'\','+i+',-1)"')+'>▲</button>';
+  var dn='<button title="아래로(우선순위 ↓)" style="'+st+(i>=len-1?';opacity:.25;cursor:default':'')+'" '+(i>=len-1?'disabled':'onclick="ruleMove(\''+which+'\','+i+',1)"')+'>▼</button>';
+  return up+dn;
+}
+/* 품목명(소재) 매핑 행 추가 — 설정 팝업(soakedBodySp)과 메인 탭(soakedBody) 양쪽을 모두 다시 그린다.
+   기존에는 renderSoakedTable()만 호출해 설정 팝업에서는 추가한 행이 보이지 않았음(추가 안 되는 것처럼 보이던 버그). */
+function addSoakedRow(){
+  soakedRules.push({fileKeyword:'',label:''});
+  try{ renderSoakedTable(); }catch(e){}
+  try{ if(typeof _initCprpOnSettingsOpen==='function')_initCprpOnSettingsOpen(); }catch(e){}
+  try{ if(typeof updateBadges==='function')updateBadges(); }catch(e){}
+  try{ syncSettingsQuiet(); }catch(e){}
+  /* 새로 추가한 행의 '파일명 키워드' 입력칸에 바로 포커스 */
+  setTimeout(function(){
+    var tb=document.getElementById('soakedBodySp');
+    if(!tb||!tb.offsetParent)tb=document.getElementById('soakedBody');
+    if(!tb)return;
+    var tr=tb.rows[tb.rows.length-1];
+    if(tr){ var inp=tr.querySelector('input'); if(inp){ try{ inp.scrollIntoView({block:'nearest'}); }catch(e){} inp.focus(); } }
+  },30);
+}
 
 function renderItemTable(){
   var body=document.getElementById('itemBody');if(!body)return;
   body.innerHTML=itemRules.map(function(r,i){
     return'<tr><td class="row-num">'+(i+1)+'</td>'
-      +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="itemRules['+i+'].fileKeyword=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-      +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="itemRules['+i+'].label=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-      +'<td><button class="btn-del-row" onclick="itemRules.splice('+i+',1);renderItemTable()">×</button></td>'
+      +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="itemRules['+i+'].fileKeyword=this.value;applyMappingChange()"></td>'
+      +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="itemRules['+i+'].label=this.value;applyMappingChange()"></td>'
+      +'<td style="white-space:nowrap">'+_ruleOrderBtns('item',i,itemRules.length)+'<button class="btn-del-row" onclick="itemRules.splice('+i+',1);renderItemTable();applyMappingChange()">×</button></td>'
       +'</tr>';
   }).join('');
 }
-function addItemRow(){itemRules.push({fileKeyword:'',label:''});renderItemTable();}
+function addItemRow(){
+  itemRules.push({fileKeyword:'',label:''});
+  try{ renderItemTable(); }catch(e){}
+  try{ if(typeof updateBadges==='function')updateBadges(); }catch(e){}
+  try{ syncSettingsQuiet(); }catch(e){}
+  setTimeout(function(){
+    var tb=document.getElementById('itemBody'); if(!tb)return;
+    var tr=tb.rows[tb.rows.length-1];
+    if(tr){ var inp=tr.querySelector('input'); if(inp)inp.focus(); }
+  },30);
+}
 // Ensure default item rules exist
 if(!itemRules||!itemRules.length){
   itemRules=DEFAULT_ITEM_RULES.map(function(r){return{fileKeyword:r.fileKeyword,label:r.label};});
@@ -4564,7 +4774,7 @@ function _pvPushUndo(){ try{ _pvUndoStack.push(_pvSnap()); if(_pvUndoStack.lengt
 function pvUndo(){ if(!_pvUndoStack.length)return; try{ _pvRedoStack.push(_pvSnap()); _pvRestoreSnap(_pvUndoStack.pop()); window._pvDirty=true; renderLivePreview(); }catch(e){console.warn('undo',e);} }
 function pvRedo(){ if(!_pvRedoStack.length)return; try{ _pvUndoStack.push(_pvSnap()); _pvRestoreSnap(_pvRedoStack.pop()); window._pvDirty=true; renderLivePreview(); }catch(e){console.warn('redo',e);} }
 function _pvUpdateUndoUI(){ var u=document.getElementById('pvUndoBtn'),r=document.getElementById('pvRedoBtn'); if(u){u.disabled=!_pvUndoStack.length;u.style.opacity=_pvUndoStack.length?'1':'.4';u.style.cursor=_pvUndoStack.length?'pointer':'default';} if(r){r.disabled=!_pvRedoStack.length;r.style.opacity=_pvRedoStack.length?'1':'.4';r.style.cursor=_pvRedoStack.length?'pointer':'default';} }
-window.addEventListener('beforeunload',function(e){ if(window._pvDirty&&_liveRows&&_liveRows.length>1){ e.preventDefault(); e.returnValue='저장하지 않은 데이터가 있습니다. 온보딩한 엑셀 데이터가 사라질 수 있으니 [JSON 파일 저장]으로 먼저 저장하세요.'; return e.returnValue; } });
+window.addEventListener('beforeunload',function(e){ try{ if(window._pvDirty&&_liveRows&&_liveRows.length>1&&typeof _autoSaveNow==='function')_autoSaveNow(true); }catch(_e){} if(window._pvDirty&&_liveRows&&_liveRows.length>1){ e.preventDefault(); e.returnValue='저장하지 않은 데이터가 있습니다. 온보딩한 엑셀 데이터가 사라질 수 있으니 [JSON 파일 저장]으로 먼저 저장하세요.'; return e.returnValue; } });
 document.addEventListener('keydown',function(e){
   var _ae=document.activeElement;
   if(_ae&&(_ae.tagName==='INPUT'||_ae.tagName==='TEXTAREA'||_ae.isContentEditable))return;
@@ -4597,7 +4807,7 @@ function filterLiveRowsByPV(body){
       if(_pvSelectedDateEnd&&d>_pvSelectedDateEnd)return false;
     }
     if(_pvSelectedItem&&row[1]!==_pvSelectedItem)return false;
-    if(_pvProgSearch){var pname=String(row[2]||'').replace(/ <본방>$/,'').toLowerCase();if(pname.indexOf(_pvProgSearch.toLowerCase())<0)return false;}
+    if(_pvProgSearch){var pname=_progBase(row[2]).toLowerCase();if(pname.indexOf(_pvProgSearch.toLowerCase())<0)return false;}
     for(var _cf in _pvColFilters){var _al=_pvColFilters[_cf];if(_al){var _cv=_pvColVal(+_cf,row[_cf]);if(!_al.has(_cv))return false;}}
     return true;
   });
@@ -4722,10 +4932,10 @@ function renderLivePreview(){
         return'<td class="pv-editable-cell" data-row="'+ri+'" data-col="'+i+'"></td>';
       }
       if(i===2){
-        var dispV=String(v).replace(/ <본방>$/,'');
-        var isBonbang=String(v).indexOf('<본방>')>=0;
-        var cls=isBonbang?'pv-prog-cell pv-bonbang pv-editable-cell':'pv-prog-cell pv-editable-cell';
-        var bonSuffix=isBonbang?'<span class="pv-bonbang-suffix" contenteditable="false" style="color:#e0005a;font-weight:700;user-select:none"> &lt;본방&gt;</span>':'';
+        var _tg=_progTags(v);
+        var dispV=_progBase(v);
+        var cls='pv-prog-cell'+_progTagCls(_tg)+' pv-editable-cell';
+        var bonSuffix=_progTagHTML(_tg);
         return'<td class="'+cls+'" id="pvtd-'+ri+'" data-row="'+ri+'" data-col="2" data-orig="'+esc(dispV)+'"><span class="pv-prog-text">'+esc(dispV)+'</span>'+bonSuffix+'</td>';
       }
       if(i===41){
@@ -5050,14 +5260,15 @@ function pvEditProg(input, rowIdx){
   if(!_pvFilteredRows||rowIdx>=_pvFilteredRows.length)return;
   var row=_pvFilteredRows[rowIdx];
   var oldName=row[2]||'';
-  var isBonbang=oldName.indexOf(' <본방>')>=0;
-  var oldBase=oldName.replace(/ <본방>$/,'');
+  var _tags=_progTags(oldName);
+  var isBonbang=_tags.indexOf('본방')>=0;
+  var oldBase=_progBase(oldName);
   var newBase=input.value.trim();
   if(newBase===oldBase)return;
   // Update progNameMap
   progNameMap[oldBase]=newBase;
   // Update the liveRows entry
-  row[2]=newBase+(isBonbang?' <본방>':'');
+  row[2]=_progWithTags(newBase,_tags);
   input.classList.toggle('pv-bonbang',isBonbang);
   // Rebuild full name map (sync progFullBody etc)
   syncProgFull();
@@ -5122,9 +5333,7 @@ function pvChangeSelectCell(sel){
   if(col===41){
     var nb=(val==='본방')?1:(val===''?'':0);
     row[41]=nb;
-    var pn=String(row[2]||''), has=pn.indexOf(' <본방>')>=0;
-    if(nb===1&&!has)row[2]=pn+' <본방>';
-    else if(nb!==1&&has)row[2]=pn.replace(/ <본방>$/,'');
+    row[2]=_progSetBonbang(String(row[2]||''),nb===1);
     if(typeof syncProgFull==='function'){try{syncProgFull();}catch(e){}}
   } else if(col===3){
     row[3]=val;
@@ -5148,13 +5357,7 @@ function pvChangeBonbang(sel,rowIdx){
   var oldVal=+row[41]||0;
   row[41]=newVal;
   // Update program name: add or remove <본방>
-  var progName=String(row[2]||'');
-  var hasBonbang=progName.indexOf(' <본방>')>=0;
-  if(newVal&&!hasBonbang){
-    row[2]=progName+' <본방>';
-  } else if(!newVal&&hasBonbang){
-    row[2]=progName.replace(/ <본방>$/,'');
-  }
+  row[2]=_progSetBonbang(String(row[2]||''),!!newVal);
   // Also update in _liveRows
   if(_liveRows){
     for(var li=1;li<_liveRows.length;li++){
@@ -5181,13 +5384,14 @@ function pvPasteProgHandler(e){
     if(ri>=_pvFilteredRows.length)return;
     var row=_pvFilteredRows[ri];
     var oldName=row[2]||'';
-    var isBonbang=oldName.indexOf(' <본방>')>=0;
-    var oldBase=oldName.replace(/ <본방>$/,'');
+    var _tags=_progTags(oldName);
+    var isBonbang=_tags.indexOf('본방')>=0;
+    var oldBase=_progBase(oldName);
     var newBase=line.trim();
     if(newBase===oldBase)return;
     if(_liveRows){for(var _ui=1;_ui<_liveRows.length;_ui++){if(_liveRows[_ui]===row){_pushProgUndo(_ui-1,oldName);break;}}}
     progNameMap[oldBase]=newBase;
-    row[2]=newBase+(isBonbang?' <본방>':'');
+    row[2]=_progWithTags(newBase,_tags);
   });
   syncProgFull();
   renderLivePreview();
@@ -5198,12 +5402,13 @@ function pvBlurProg(td,rowIdx){
   var row=_pvFilteredRows[rowIdx];
   var oldName=row[2]||'';
   var _undoOld=oldName;
-  var isBonbang=oldName.indexOf(' <본방>')>=0;
-  var oldBase=oldName.replace(/ <본방>$/,'');
+  var _tags=_progTags(oldName);
+  var isBonbang=_tags.indexOf('본방')>=0;
+  var oldBase=_progBase(oldName);
   var newBase=(td.textContent||'').trim();
   if(newBase===oldBase)return;
   progNameMap[oldBase]=newBase;
-  row[2]=newBase+(isBonbang?' <본방>':'');
+  row[2]=_progWithTags(newBase,_tags);
   syncProgFull();
   // Find the actual index in _liveRows for undo
   if(_liveRows){for(var _ui=1;_ui<_liveRows.length;_ui++){if(_liveRows[_ui]===row){_pushProgUndo(_ui-1,_undoOld);break;}}}
@@ -5534,7 +5739,7 @@ function ccmDrop(e,pos){
 }
 
 /* 파일 없이 화면 데이터만 있을 때의 엑셀 내보내기(큐시트 + raw 2시트) */
-function _mergeFromLiveRows(){
+function _mergeFromLiveRows(fileBase){
   if(typeof XLSX==='undefined'){alert('엑셀 모듈을 불러오지 못했습니다.');return;}
   try{
     var rows=_liveRows;
@@ -5553,9 +5758,9 @@ function _mergeFromLiveRows(){
     var n=new Date();
     var stamp=n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0')
              +'_'+String(n.getHours()).padStart(2,'0')+String(n.getMinutes()).padStart(2,'0');
-    XLSX.writeFile(wb,'큐시트_'+stamp+'.xlsx');
+    XLSX.writeFile(wb,(fileBase||'큐시트')+'_'+stamp+'.xlsx');
     if(typeof log==='function')log('완료! '+(rows.length-1)+'행 내보냄','ok');
-  }catch(e){ alert('엑셀 생성 실패: '+e.message); }
+  }catch(e){ alert('엑셀 생성 실패: '+e.message); console.error(e); }
 }
 function confirmAndMerge(){
   if(!_colConfig||_colConfig.length===0){
@@ -5565,23 +5770,63 @@ function confirmAndMerge(){
   mergeFiles();
 }
 
+/* 다운로드 후 통계 카드 채우기(화면 데이터 기준) */
+function _mergeExportStats(loaded){
+  try{
+    var card=document.getElementById('statsCard');
+    var rows=(_liveRows&&_liveRows.length>1)?_liveRows.length-1:0;
+    var shs=0;
+    (loaded||[]).forEach(function(f){ shs+=((f.sheets||[]).length); });
+    var set=function(id,v){ var el=document.getElementById(id); if(el)el.textContent=v; };
+    set('s-files',(loaded||[]).length);
+    set('s-sheets',shs);
+    set('s-rows',rows.toLocaleString());
+    set('s-filtered','0');
+    set('s-excluded','0');
+    if(card)card.style.display='';
+  }catch(e){}
+}
+
 function mergeFiles(){
-  // Pre-validation: 품목
   var loaded=files.filter(function(f){return f.status==='loaded';});
+
+  /* 🔴 2026-08-25 수정 — 다운로드는 **화면에 보이는 데이터(_liveRows)** 를 그대로 내보낸다.
+     예전에는 여기서 원본 파일을 다시 파싱해 normRows를 만들고 마지막에 `_liveRows=normRows`로
+     화면 데이터를 통째로 갈아치웠다. 그래서
+       · 추가 온보딩/JSON으로 들어온 기존 데이터(window._consolidatedRows)가 전부 사라지고
+       · 셀을 직접 고친 내용도 원래대로 되돌아가는
+     치명적인 데이터 유실이 있었다(자동 저장이 켜진 뒤로는 그 상태가 저장까지 됨).
+     _liveRows는 buildPreviewNormRows()가 만든 것이라 정규화·중복제거·본방 처리가 이미 끝나 있고
+     기존 파일 기반 경로와 같은 시트 구성(큐시트+raw)으로 나가므로 결과물은 동일하다. */
+  if(!_liveRows&&loaded.length){ try{ _liveRows=buildPreviewNormRows(); }catch(e){ console.warn('build for export',e); } }
+  if(_liveRows&&_liveRows.length>1){
+    try{
+      var unmatchedItem=[];
+      loaded.forEach(function(f){
+        var soaeName=getSoakedLabel(f.name);
+        if(soaeName&&!getItemLabel(soaeName)&&unmatchedItem.indexOf(soaeName)<0)unmatchedItem.push(soaeName);
+      });
+      if(unmatchedItem.length&&typeof log==='function')log('품목 매핑 없는 소재명: '+unmatchedItem.join(', '),'warn');
+    }catch(e){}
+    try{ if(typeof updatePPOrderList==='function')updatePPOrderList(); }catch(e){}
+    _mergeFromLiveRows(loaded.length?'케이블 큐시트 RAW데이터':'큐시트');
+    _mergeExportStats(loaded);
+    return;
+  }
   if(!loaded.length){
-    /* 캠페인·JSON으로 불러온 데이터만 있는 경우 → 화면 데이터를 그대로 내보낸다 */
-    if(_liveRows&&_liveRows.length>1){ _mergeFromLiveRows(); return; }
     log('로드된 파일이 없습니다','err'); alert('내보낼 데이터가 없습니다.'); return;
   }
 
-  var unmatchedItem=[];
-  loaded.forEach(function(f){
-    var soaeName=getSoakedLabel(f.name);
-    if(soaeName&&!getItemLabel(soaeName)&&unmatchedItem.indexOf(soaeName)<0)unmatchedItem.push(soaeName);
-  });
-  if(unmatchedItem.length){
-    if(!confirm('⚠️ 품목 매핑이 없는 소재명:\n\n'+unmatchedItem.join('\n')+'\n\n그래도 다운로드하시겠습니까?'))return;
-  }
+  /* 품목 매핑 없는 소재명 확인창 제거(2026-08-25 요청) — 미매핑이어도 그대로 다운로드한다.
+     필요하면 로그에만 남긴다. */
+  try{
+    var unmatchedItem=[];
+    loaded.forEach(function(f){
+      var soaeName=getSoakedLabel(f.name);
+      if(soaeName&&!getItemLabel(soaeName)&&unmatchedItem.indexOf(soaeName)<0)unmatchedItem.push(soaeName);
+    });
+    if(unmatchedItem.length&&typeof log==='function')log('품목 매핑 없는 소재명: '+unmatchedItem.join(', '),'warn');
+  }catch(e){}
 
 
   var btn=document.getElementById('mergeBtn');
@@ -5604,7 +5849,7 @@ function mergeFiles(){
 
         f.sheets.forEach(function(sh,_shIdx){
           if(_dupSheets[sh.name])return; // 동일 파일 내 중복 시트(동일 PP/채널+동일 데이터) 제외
-          if(sh.qmate){ var _qr=_qmSheetRows(sh); if(_qr)_qr.forEach(function(_q){ if(!_q[55])_q[55]=f.name; normRows.push(_q);}); return; }   /* Q-Mate 내보낸 엑셀은 정규화 없이 그대로 */
+          if(sh.qmate){ var _qr=_qmSheetRows(sh); if(_qr)_qr.forEach(function(_q){ if(!_q[55])_q[55]=f.name; if(!_q[57])_q[57]=sh.name||''; normRows.push(_q);}); return; }   /* Q-Mate 내보낸 엑셀은 정규화 없이 그대로 */
           var pc=lookupPC(f.name,sh.name);
           if(!pc.pp&&!pc.channel)return;
           if(!sh.colInfo||!sh.colInfo.types||!sh.dataRows)return;
@@ -5659,7 +5904,7 @@ function mergeFiles(){
             if(!p.prog&&!p.st&&!p.cm&&!p.grade){filtered++;return;}
             // 스포츠/균등분배 모드: 이미 횟수만큼 dates에 중복 들어있음 (1방송=1행)
             var _isDistributed_dl=_hasWDSports_dl||_hasWDEvenDist_dl;
-            var _rawProgEarly_dl=(p.prog||'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/[＜<〈\[【「『(\（]\s*본방\s*[＞>〉\]】」』)\）]/g,'<본방>').replace(/[＜<〈\[【「『(\（]\s*본\s*[＞>〉\]】」』)\）]/g,'<본방>');
+            var _rawProgEarly_dl=_progNormTags(p.prog||'');
             var _isKBOLive_dl=_isSportsMBC_dl&&isKBOLiveProgram(applyProgMap(_rawProgEarly_dl));
             allDates.forEach(function(isoDate){
               var yr=+isoDate.slice(0,4),mo=+isoDate.slice(5,7),dy=+isoDate.slice(8,10);
@@ -5694,14 +5939,15 @@ function mergeFiles(){
               var _rawProg=p.prog||'';
               // Extra normalization for <본방> in case processRow didn't catch it
               _rawProg=_rawProg.replace(/&lt;/g,'<').replace(/&gt;/g,'>');
-              _rawProg=_rawProg.replace(/[＜<〈\[【「『(\（]\s*본방\s*[＞>〉\]】」』)\）]/g,'<본방>').replace(/[＜<〈\[【「『(\（]\s*본\s*[＞>〉\]】」』)\）]/g,'<본방>');
+              _rawProg=_progNormTags(_rawProg);
               var progNameRaw=applyProgMap(_rawProg);
-              var origHasBonbang=progNameRaw.indexOf('<본방>')>=0;
-              var progName=origHasBonbang?progNameRaw.replace(/\s*<본방>\s*/g,'').trim():progNameRaw;
+              var _oTags=_progTags(progNameRaw);
+              var origHasBonbang=_oTags.indexOf('본방')>=0;
+              var progName=_progBase(progNameRaw);
 
               // Apply 본방 — keyed on MAPPED name so it stays in sync with progNameMap edits
               var bonbangKey=pc.channel+'|'+progName+'|'+dow+'|'+stOver+'|'+etOver;
-              if(bonbangChecked[bonbangKey]||origHasBonbang)progName=progName+' <본방>';
+              progName=_progWithTags(progName,(bonbangChecked[bonbangKey]||origHasBonbang)?_oTags.concat(['본방']):_oTags);
 
               var soaeName=getSoakedLabel(f.name);
               // 지상파 채널(KBS/MBC/SBS)은 소재 = '미지정'
@@ -5760,6 +6006,7 @@ function mergeFiles(){
               var reps=(allDates.length>1||_dlDatesFromDOW)?1:Math.max(1,Math.round(p.cnt));
               baseRow[55]=f.name;
               baseRow[56]=String(p.cm==null?'':p.cm).trim();   /* CM위치(미보정) */
+              baseRow[57]=sh.name||'';                          /* 원본 시트명 — 매핑 재적용용 */
               for(var ri=0;ri<reps;ri++)_fileRows_dl.push({row:baseRow.slice(),sh:_shIdx});
             }); // end allDates.forEach
           });
@@ -5811,7 +6058,7 @@ function mergeFiles(){
 
       // Post-process: AP (본방여부) — index 41
       normRows.slice(1).forEach(function(row){
-        row[41]=String(row[2]||'').indexOf('<본방>')>=0?1:0;
+        row[41]=_progTags(row[2]).indexOf('본방')>=0?1:0;
       });
 
       // Post-process: BA (지상파용 값) — index 52 — left blank for user
@@ -5923,7 +6170,13 @@ function mergeFiles(){
       var stamp=now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0')
                +'_'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0');
       XLSX.writeFile(wb2,'케이블 큐시트 RAW데이터_'+stamp+'.xlsx');
-      // Keep data visible after download
+      /* 화면 데이터가 없을 때만 도달하는 경로. 그래도 기존 스냅샷(추가 온보딩분)은 앞에 붙여 보존한다. */
+      if(window._consolidatedRows&&window._consolidatedRows.length){
+        var _m=[normRows[0]];
+        window._consolidatedRows.forEach(function(_c){_m.push(_c);});
+        for(var _mi=1;_mi<normRows.length;_mi++)_m.push(normRows[_mi]);
+        normRows=_m;
+      }
       _liveRows=normRows;
 
       document.getElementById('s-files').textContent=loaded.length;
@@ -5931,7 +6184,6 @@ function mergeFiles(){
       document.getElementById('s-rows').textContent=totRows.toLocaleString();
       document.getElementById('s-filtered').textContent=filtered.toLocaleString();
       document.getElementById('s-excluded').textContent=excFiles.length;
-      _liveRows=normRows;
       // Update PP order list with any newly seen PPs
       updatePPOrderList();
       // Refresh cusheet display without resetting filters
@@ -6112,7 +6364,7 @@ function renderMediaSection(){
   var progMap={};
   allRows.forEach(function(r){
     var sg=ppGroup(r);
-    var progClean=r.prog.replace(/ <본방>$/,'');
+    var progClean=_progBase(r.prog);
     var k=r.soae+'||'+sg+'||'+progClean+'||'+r.cm;
     if(!progMap[k])progMap[k]={soae:r.soae,ppG:sg,prog:progClean,cm:r.cm,value:0};
     progMap[k].value+=(r.price||0);
@@ -6670,7 +6922,7 @@ function buildPVRows(){
         // Skip rows with no meaningful content (empty prog, no time, no cm) — 3대 함수 동기화
         if(!p.prog&&!p.st&&!p.cm&&!p.grade)return;
         var _isDistributed_pv=_hasWDSports_pv||_hasWDEvenDist_pv;
-        var _rawProgEarly_pv=(p.prog||'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/[＜<〈\[【「『(\（]\s*본방\s*[＞>〉\]】」』)\）]/g,'<본방>').replace(/[＜<〈\[【「『(\（]\s*본\s*[＞>〉\]】」』)\）]/g,'<본방>');
+        var _rawProgEarly_pv=_progNormTags(p.prog||'');
         var _isKBOLive_pv=_isSportsMBC_pv&&isKBOLiveProgram(applyProgMap(_rawProgEarly_pv));
          allDates.forEach(function(isoDate){
            var yr=+isoDate.slice(0,4),mo=+isoDate.slice(5,7),dy=+isoDate.slice(8,10);
@@ -6698,12 +6950,13 @@ function buildPVRows(){
            var _rawProg=p.prog||'';
            // Extra normalization for <본방> in case processRow didn't catch it
            _rawProg=_rawProg.replace(/&lt;/g,'<').replace(/&gt;/g,'>');
-           _rawProg=_rawProg.replace(/[＜<〈\[【「『(\（]\s*본방\s*[＞>〉\]】」』)\）]/g,'<본방>').replace(/[＜<〈\[【「『(\（]\s*본\s*[＞>〉\]】」』)\）]/g,'<본방>');
+           _rawProg=_progNormTags(_rawProg);
            var progNameRaw=applyProgMap(_rawProg);
-           var origHasBonbang=progNameRaw.indexOf('<본방>')>=0;
-           var progName=origHasBonbang?progNameRaw.replace(/\s*<본방>\s*/g,'').trim():progNameRaw;
+           var _oTags=_progTags(progNameRaw);
+           var origHasBonbang=_oTags.indexOf('본방')>=0;
+           var progName=_progBase(progNameRaw);
            var bonbangKey=pc.channel+'|'+ progName+'|'+ dow+'|'+ stOverPV+'|'+ etOverPV;
-           if(bonbangChecked[bonbangKey]||origHasBonbang)progName=progName+' <본방>';
+           progName=_progWithTags(progName,(bonbangChecked[bonbangKey]||origHasBonbang)?_oTags.concat(['본방']):_oTags);
            var valueDisp=soae+' / '+(dur?dur+'초':'')+' / '+cmNormed;
            var mmdd2=String(mo).padStart(2,'0')+'/'+String(dy).padStart(2,'0');
            var _pvDatesFromDOW=!p.date||_hasWDSports_pv||_hasWDEvenDist_pv;
@@ -6815,7 +7068,7 @@ function renderPreview(){
     var midStat=pg.cmTotal?'중CM '+midPct+'%':'';
     var isBonbang=pg.isBonbang;
     // Strip ' <본방>' suffix from display name — badge handles the label
-    var displayName=pg.prog.replace(/\s*<본방>$/,'');
+    var displayName=_progBase(pg.prog);
     var progHdrStyle=isBonbang?'background:rgba(224,0,90,.18)!important;border-top:2px solid rgba(224,0,90,.55)!important':'';
     bodyHtml+='<tr class="pv-prog-hdr" style="'+progHdrStyle+'"><td colspan="'+colCount+'">'
       +'<span class="pv-prog-name" style="'+(isBonbang?'color:var(--accent2);font-size:.84rem':'')+'">'+esc(displayName)+'</span>'
@@ -7196,6 +7449,9 @@ function clearOnboardingData(){
    실시간 자동 저장하고, 재접속 시 자동 복원한다. 온라인(Chrome/Edge)에서 '저장'을 누르면
    File System Access API로 실제 JSON 파일에도 자동 저장(업그레이드)된다. */
 var AUTOSAVE_KEY='cusheet_autosave_v1';
+var AUTOSAVE_BAK_KEY='cusheet_autosave_bak_v1';
+var AUTOSAVE_INTERVAL_MS=180000;   /* 자동 저장 최소 간격: 3분 */
+var AUTOSAVE_BAK_MAX=5;            /* 보관할 백업 버전 수 */
 var _lastAutoSaveTs=0, _autoSaveTimer=null, _autoSaveFileHandle=null;
 var _fsAccessAvail=(typeof window!=='undefined' && typeof window.showSaveFilePicker==='function');
 
@@ -7208,31 +7464,171 @@ function _serializeOnboardingFiles(){
   });
 }
 function _currentSettings(){
-  try{ return {mappingRules:mappingRules,soakedRules:soakedRules,itemRules:itemRules,broadcastRules:broadcastRules,ppOrderList:ppOrderList,longNameRules:longNameRules,bonbangChecked:bonbangChecked,progNameMap:progNameMap,cmNormRules:cmNormRules,_colConfig:_colConfig,_anItemColors:window._anItemColors||{},_anAnalysisOptions:window._anAnalysisOptions||{},_anRowOrder:(window._anRowOrderSaved||null),_calChOrder:(window._calChOrder||null),_calSortMode:(window._calSortMode||null),_pivotTemplates:(window._pivotTemplates||[]),_pivotCfg:(window._pivotCfg||null)}; }catch(e){ return null; }
+  try{ return {mappingRules:mappingRules,soakedRules:soakedRules,itemRules:itemRules,broadcastRules:broadcastRules,ppOrderList:ppOrderList,longNameRules:longNameRules,bonbangChecked:bonbangChecked,progNameMap:progNameMap,cmNormRules:cmNormRules,_colConfig:_colConfig,_anItemColors:window._anItemColors||{},_anAnalysisOptions:window._anAnalysisOptions||{},_anRowOrder:(window._anRowOrderSaved||null),_calChOrder:(window._calChOrder||null),_calSortMode:(window._calSortMode||null),_pivotTemplates:(window._pivotTemplates||[]),_pivotCfg:(window._pivotCfg||null),_mapOrderManual:!!window._mapOrderManual,_soakedOrderManual:!!window._soakedOrderManual}; }catch(e){ return null; }
 }
 function _buildAutoSavePayload(){
   return {v:2,savedAt:Date.now(),liveRows:(_liveRows&&_liveRows.length>1)?_liveRows:null,files:_serializeOnboardingFiles(),campaign:(window._campaignInfo||null),settings:_currentSettings(),consolidated:(window._consolidatedRows||null)};
 }
-function _autoSaveNow(){
+function _autoSaveNow(makeBackup){
   if(!files.length && !(_liveRows&&_liveRows.length>1)) return;
   var payload=_buildAutoSavePayload(), json;
   try{ json=JSON.stringify(payload); }catch(e){ return; }
   var ok=false;
   try{ localStorage.setItem(AUTOSAVE_KEY,json); ok=true; }
   catch(e){ try{ payload.liveRows=null; localStorage.setItem(AUTOSAVE_KEY,JSON.stringify(payload)); ok=true; }catch(e2){} }
+  if(makeBackup!==false)_pushAutoBackup(payload);
   if(_autoSaveFileHandle){
     try{ _autoSaveFileHandle.createWritable().then(function(w){ return w.write(json).then(function(){ return w.close(); }); }).catch(function(){}); }catch(e){}
   }
   if(ok||_autoSaveFileHandle){ _lastAutoSaveTs=Date.now(); _updateAutoSaveLabel(); }
 }
-function _scheduleAutoSave(){ /* 자동 저장 제거(v2.8): 'JSON 파일 저장'으로만 보관 */ }
-function _updateAutoSaveLabel(){
-  var el=document.getElementById('autoSaveStatus');
-  if(!el)return;
-  if(!_lastAutoSaveTs){ el.textContent=''; return; }
-  var mins=Math.floor((Date.now()-_lastAutoSaveTs)/60000);
-  el.textContent=' · '+mins+'분 전 저장';
+/* ═══ 자동 저장 (2026-08-25 부활) ═══
+   변경이 생기면 예약하고, 마지막 저장으로부터 최소 AUTOSAVE_INTERVAL_MS(3분)가
+   지난 뒤에 한 번만 저장한다. 저장할 때마다 백업 버전을 최대 5개까지 돌려가며 보관. */
+function _scheduleAutoSave(){
+  try{ window._pvDirty=true; }catch(e){}
+  if(_autoSaveTimer)return;
+  var since=Date.now()-(_lastAutoSaveTs||0);
+  var wait=Math.max(5000, AUTOSAVE_INTERVAL_MS-since);
+  _autoSaveTimer=setTimeout(function(){
+    _autoSaveTimer=null;
+    try{ _autoSaveNow(true); }catch(e){ console.warn('autosave',e); }
+  },wait);
 }
+
+/* 백업 버전 적립 — 원본 시트(files)는 용량이 커서 제외하고 큐시트 행/설정만 보관 */
+function _pushAutoBackup(payload){
+  try{
+    if(!payload||!payload.liveRows||payload.liveRows.length<2)return;
+    var slim={v:2,savedAt:payload.savedAt,liveRows:payload.liveRows,
+              campaign:payload.campaign,settings:payload.settings,consolidated:payload.consolidated};
+    var entry={ts:payload.savedAt,rows:payload.liveRows.length-1,data:JSON.stringify(slim)};
+    var arr=_readAutoBackups(true);
+    /* 직전 백업과 내용이 같으면 새 버전을 만들지 않음 */
+    if(arr.length&&arr[arr.length-1].data===entry.data)return;
+    arr.push(entry);
+    while(arr.length>AUTOSAVE_BAK_MAX)arr.shift();
+    while(arr.length){
+      try{ localStorage.setItem(AUTOSAVE_BAK_KEY,JSON.stringify(arr)); return; }
+      catch(e){ arr.shift(); }   /* localStorage 용량 초과 → 오래된 백업부터 버림 */
+    }
+    try{ localStorage.removeItem(AUTOSAVE_BAK_KEY); }catch(e){}
+  }catch(e){ console.warn('backup',e); }
+}
+function _readAutoBackups(raw){
+  var arr=[];
+  try{ arr=JSON.parse(localStorage.getItem(AUTOSAVE_BAK_KEY)||'[]'); }catch(e){ arr=[]; }
+  if(!Array.isArray(arr))arr=[];
+  return raw?arr:arr.slice().reverse();   /* 화면에는 최신 순 */
+}
+function _bakTimeLabel(ts){
+  try{
+    var d=new Date(ts);
+    var p=function(n){return String(n).padStart(2,'0');};
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+  }catch(e){ return String(ts); }
+}
+
+/* 백업 목록 팝업 */
+function openAutoBackups(){
+  var list=_readAutoBackups();
+  var ex=document.getElementById('bakOverlay'); if(ex)ex.remove();
+  var ov=document.createElement('div'); ov.id='bakOverlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:10000;display:flex;align-items:center;justify-content:center';
+  var h='<div style="background:#fff;border-radius:10px;width:min(520px,94vw);max-height:80vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.25)">'
+    +'<div style="padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between">'
+    +'<b style="font-size:.86rem">자동 저장 백업</b>'
+    +'<button onclick="closeAutoBackups()" style="border:none;background:none;font-size:1.1rem;cursor:pointer;color:#888">✕</button></div>'
+    +'<div style="padding:10px 16px;font-size:.7rem;color:#777;line-height:1.5">3분마다 변경분을 자동 저장하고, 최근 '+AUTOSAVE_BAK_MAX+'개 버전을 보관합니다. 복원하면 지금 화면의 데이터는 교체됩니다.</div>';
+  if(!list.length){
+    h+='<div style="padding:22px 16px;text-align:center;color:#999;font-size:.78rem">아직 저장된 백업이 없습니다.</div>';
+  }else{
+    h+='<div style="padding:0 10px 10px">';
+    list.forEach(function(b,i){
+      var kb=Math.round((b.data||'').length/1024);
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:9px 8px;border-bottom:1px solid #f0f0f0">'
+        +'<div style="flex:1"><div style="font-size:.78rem;font-weight:600">'+_bakTimeLabel(b.ts)+(i===0?' <span style="font-size:.6rem;color:#0068b5;border:1px solid #9cf;background:#eef6ff;border-radius:8px;padding:0 5px">최신</span>':'')+'</div>'
+        +'<div style="font-size:.66rem;color:#888">'+(b.rows||0).toLocaleString()+'행 · '+kb+'KB</div></div>'
+        +'<button onclick="restoreAutoBackup('+b.ts+')" style="padding:4px 12px;border:1px solid #0068b5;background:#0068b5;color:#fff;border-radius:5px;font-size:.7rem;cursor:pointer">복원</button>'
+        +'</div>';
+    });
+    h+='</div><div style="padding:10px 16px;border-top:1px solid #eee;text-align:right">'
+      +'<button onclick="clearAutoBackups()" style="padding:4px 10px;border:1px solid #ddd;background:#fafafa;color:#777;border-radius:5px;font-size:.68rem;cursor:pointer">백업 전체 삭제</button></div>';
+  }
+  h+='</div>';
+  ov.innerHTML=h;
+  ov.addEventListener('mousedown',function(e){ if(e.target===ov)closeAutoBackups(); });
+  document.body.appendChild(ov);
+}
+function closeAutoBackups(){ var el=document.getElementById('bakOverlay'); if(el)el.remove(); }
+function restoreAutoBackup(ts){
+  var arr=_readAutoBackups(true);
+  var hit=null;
+  for(var i=0;i<arr.length;i++){ if(arr[i].ts===ts)hit=arr[i]; }
+  if(!hit){ if(typeof showSaveToast==='function')showSaveToast('백업을 찾을 수 없습니다.',true); return; }
+  if(!confirm(_bakTimeLabel(ts)+' 시점('+(hit.rows||0)+'행)으로 되돌립니다.\n지금 화면의 데이터는 교체됩니다. 계속할까요?'))return;
+  try{
+    _autoSaveNow(true);                       /* 되돌리기 전 현재 상태도 백업에 남긴다 */
+    var payload=JSON.parse(hit.data);
+    files=[];                                 /* 백업에는 원본 시트가 없으므로 파일 목록은 비운다 */
+    _restoreFromPayload(payload);
+    closeAutoBackups();
+    if(typeof showSaveToast==='function')showSaveToast('백업을 복원했습니다. ('+(hit.rows||0)+'행)');
+  }catch(e){ if(typeof showSaveToast==='function')showSaveToast('복원 실패: '+e.message,true); }
+}
+function clearAutoBackups(){
+  if(!confirm('보관 중인 자동 저장 백업을 모두 삭제할까요?'))return;
+  try{ localStorage.removeItem(AUTOSAVE_BAK_KEY); }catch(e){}
+  openAutoBackups();
+}
+
+/* 이전 세션 데이터가 남아 있으면 시작 시 복원할지 물어보는 안내바 */
+function _offerAutoRestore(){
+  try{
+    if(_liveRows&&_liveRows.length>1)return;
+    var raw=localStorage.getItem(AUTOSAVE_KEY);
+    if(!raw)return;
+    var p=JSON.parse(raw);
+    var n=(p&&p.liveRows&&p.liveRows.length>1)?p.liveRows.length-1:0;
+    if(!n)return;
+    var bar=document.createElement('div');
+    bar.id='autoRestoreBar';
+    bar.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:9998;background:#1f2937;color:#fff;border-radius:9px;padding:9px 14px;font-size:.74rem;display:flex;align-items:center;gap:12px;box-shadow:0 6px 22px rgba(0,0,0,.25)';
+    bar.innerHTML='<span>이전 작업 데이터가 있습니다 ('+n.toLocaleString()+'행 · '+_bakTimeLabel(p.savedAt||Date.now())+')</span>'
+      +'<button onclick="_doAutoRestore()" style="padding:4px 12px;border:none;border-radius:5px;background:#3b82f6;color:#fff;font-weight:700;font-size:.72rem;cursor:pointer">복원</button>'
+      +'<button onclick="var b=document.getElementById(\'autoRestoreBar\');if(b)b.remove();" style="padding:4px 10px;border:1px solid #4b5563;border-radius:5px;background:transparent;color:#d1d5db;font-size:.72rem;cursor:pointer">닫기</button>';
+    document.body.appendChild(bar);
+    setTimeout(function(){ var b=document.getElementById('autoRestoreBar'); if(b)b.remove(); },30000);
+  }catch(e){}
+}
+function _doAutoRestore(){
+  try{
+    var p=JSON.parse(localStorage.getItem(AUTOSAVE_KEY)||'null');
+    if(p)_restoreFromPayload(p);
+    var b=document.getElementById('autoRestoreBar'); if(b)b.remove();
+  }catch(e){ if(typeof showSaveToast==='function')showSaveToast('복원 실패: '+e.message,true); }
+}
+function _updateAutoSaveLabel(){
+  var inline=document.getElementById('autoSaveStatus');
+  if(inline){
+    if(!_lastAutoSaveTs)inline.textContent='';
+    else inline.textContent=' · '+Math.floor((Date.now()-_lastAutoSaveTs)/60000)+'분 전 저장';
+  }
+  var pill=document.getElementById('autoSavePill');
+  if(!_lastAutoSaveTs){ if(pill)pill.remove(); return; }
+  if(!pill){
+    pill=document.createElement('div');
+    pill.id='autoSavePill';
+    pill.title='자동 저장 백업 열기';
+    pill.style.cssText='position:fixed;left:12px;bottom:10px;z-index:9990;background:rgba(31,41,55,.72);color:#e5e7eb;border-radius:20px;padding:3px 11px;font-size:.63rem;cursor:pointer;user-select:none';
+    pill.onclick=function(){ try{ openAutoBackups(); }catch(e){} };
+    document.body.appendChild(pill);
+  }
+  var mins=Math.floor((Date.now()-_lastAutoSaveTs)/60000);
+  pill.textContent='자동 저장됨 · '+(mins<1?'방금':(mins+'분 전'));
+}
+/* 라벨 갱신용 타이머(1분) */
+setInterval(function(){ try{ _updateAutoSaveLabel(); }catch(e){} },60000);
 
 function manualSave(){
   window._pvDirty=false;
@@ -7287,7 +7683,7 @@ function _restoreFromPayload(payload){
   // 버전 호환: 최상위가 배열(구버전 저장형식)이면 files 목록으로 간주
   if(Array.isArray(payload))payload={files:payload};
   var restored=false;
-  if(payload.settings){ try{ localStorage.setItem('cusheet_rules_v1',JSON.stringify(payload.settings)); }catch(e){} try{ var _s=payload.settings; if(_s.mappingRules)mappingRules=_s.mappingRules; if(_s.soakedRules)soakedRules=_s.soakedRules; if(_s.itemRules)itemRules=_s.itemRules; if(_s.broadcastRules)broadcastRules=_s.broadcastRules; if(_s.ppOrderList)ppOrderList=_s.ppOrderList; if(_s.longNameRules)longNameRules=_s.longNameRules; if(_s.cmNormRules)cmNormRules=_s.cmNormRules; if(_s.progNameMap)Object.assign(progNameMap,_s.progNameMap); if(_s.bonbangChecked)Object.assign(bonbangChecked,_s.bonbangChecked); if(Array.isArray(_s._colConfig))_colConfig=_s._colConfig; if(_s._anItemColors)window._anItemColors=_s._anItemColors; if(_s._anRowOrder)window._anRowOrderSaved=_s._anRowOrder; if(_s._calChOrder)window._calChOrder=_s._calChOrder; if(_s._calSortMode)window._calSortMode=_s._calSortMode; if(_s._pivotTemplates)window._pivotTemplates=_s._pivotTemplates; if(_s._pivotCfg)window._pivotCfg=_s._pivotCfg; if(_s._anAnalysisOptions)window._anAnalysisOptions=_s._anAnalysisOptions; }catch(e){ console.warn('restore settings',e); } }
+  if(payload.settings){ try{ localStorage.setItem('cusheet_rules_v1',JSON.stringify(payload.settings)); }catch(e){} try{ var _s=payload.settings; if(_s.mappingRules)mappingRules=_s.mappingRules; if(_s.soakedRules)soakedRules=_s.soakedRules; if(_s.itemRules)itemRules=_s.itemRules; if(_s.broadcastRules)broadcastRules=_s.broadcastRules; if(_s.ppOrderList)ppOrderList=_s.ppOrderList; if(_s.longNameRules)longNameRules=_s.longNameRules; if(_s.cmNormRules)cmNormRules=_s.cmNormRules; if(_s.progNameMap)Object.assign(progNameMap,_s.progNameMap); if(_s.bonbangChecked)Object.assign(bonbangChecked,_s.bonbangChecked); if(Array.isArray(_s._colConfig))_colConfig=_s._colConfig; if(_s._anItemColors)window._anItemColors=_s._anItemColors; if(_s._anRowOrder)window._anRowOrderSaved=_s._anRowOrder; if(_s._calChOrder)window._calChOrder=_s._calChOrder; if(_s._calSortMode)window._calSortMode=_s._calSortMode; if(_s._pivotTemplates)window._pivotTemplates=_s._pivotTemplates; if(_s._pivotCfg)window._pivotCfg=_s._pivotCfg; if(_s._anAnalysisOptions)window._anAnalysisOptions=_s._anAnalysisOptions; window._mapOrderManual=!!_s._mapOrderManual; window._soakedOrderManual=!!_s._soakedOrderManual; }catch(e){ console.warn('restore settings',e); } }
   try{
     if(Array.isArray(payload.files)&&payload.files.length){
       files=[];
@@ -7592,8 +7988,8 @@ function _renderAnalysisTable(){
   var groupOrder=[];
   filtered.forEach(function(r){
     var progRaw=r[2]||'';
-    var progClean=progRaw.replace(/ <본방>$/,'');
-    var isBonbang=progRaw.indexOf('<본방>')>=0?1:(+r[41]||0);
+    var progClean=_progBase(progRaw);
+    var isBonbang=_progTags(progRaw).indexOf('본방')>=0?1:(+r[41]||0);
     var dow=r[3]||'',st=r[4]||'',et=r[5]||'',grade=r[6]||'';
     var key=progClean+'||'+dow+'||'+st+'||'+et+'||'+grade+'||'+isBonbang;
     if(!groupMap[key]){
@@ -8110,18 +8506,19 @@ function pvFinishEdit(td,ri){
   if(!_pvFilteredRows||ri>=_pvFilteredRows.length)return;
   var row=_pvFilteredRows[ri];
   var oldName=row[2]||'';
-  var isBonbang=oldName.indexOf(' <본방>')>=0;
-  var oldBase=oldName.replace(/ <본방>$/,'');
+  var _tags=_progTags(oldName);
+  var isBonbang=_tags.indexOf('본방')>=0;
+  var oldBase=_progBase(oldName);
   var newBase=(td.textContent||'').trim();
   if(newBase!==oldBase){
     _pvPushUndo();
     if(_liveRows){for(var _ui=1;_ui<_liveRows.length;_ui++){if(_liveRows[_ui]===row){_pushProgUndo(_ui-1,oldName);break;}}}
     progNameMap[oldBase]=newBase;
-    row[2]=newBase+(isBonbang?' <본방>':'');
+    row[2]=_progWithTags(newBase,_tags);
     syncProgFull();
     renderLivePreview();
   } else {
-    td.innerHTML='<span class="pv-prog-text">'+esc(oldBase)+'</span>'+(isBonbang?'<span class="pv-bonbang-suffix" contenteditable="false" style="color:#e0005a;font-weight:700;user-select:none"> &lt;본방&gt;</span>':'');
+    td.innerHTML='<span class="pv-prog-text">'+esc(oldBase)+'</span>'+_progTagHTML(_tags);
   }
   td.setAttribute('data-orig',newBase);
 }
@@ -8455,10 +8852,7 @@ document.addEventListener('keydown',function(e){
             if(frow){
               var newBon=sel.value==='1'?1:0;
               frow[41]=newBon;
-              var pn=String(frow[2]||'');
-              var had=pn.indexOf(' <본방>')>=0;
-              if(newBon&&!had)frow[2]=pn+' <본방>';
-              else if(!newBon&&had)frow[2]=pn.replace(/ <본방>$/,'');
+              frow[2]=_progSetBonbang(String(frow[2]||''),!!newBon);
             }
             pvEndEdit(td);
           } else if(ev.key==='Escape'){
@@ -8473,10 +8867,7 @@ document.addEventListener('keydown',function(e){
           if(frow){
             var newBon=sel.value==='1'?1:0;
             frow[41]=newBon;
-            var pn=String(frow[2]||'');
-            var had=pn.indexOf(' <본방>')>=0;
-            if(newBon&&!had)frow[2]=pn+' <본방>';
-            else if(!newBon&&had)frow[2]=pn.replace(/ <본방>$/,'');
+            frow[2]=_progSetBonbang(String(frow[2]||''),!!newBon);
           }
           pvEndEdit(td);
         },{once:true});
@@ -8491,6 +8882,8 @@ document.addEventListener('paste',function(e){
   if(!_pvSelectedCells.length||_pvEditingCell)return;
   var ae=document.activeElement;
   if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable))return;
+  /* 드롭다운 셀에 포커스가 남아 있으면 select가 paste를 삼킬 수 있어 포커스를 떼어 준다 */
+  if(ae&&ae.tagName==='SELECT'){ try{ ae.blur(); }catch(_e){} }
   var anchor=_pvSelAnchor||_pvSelectedCells[0];
   if(!anchor)return;
   e.preventDefault();
@@ -8507,16 +8900,13 @@ document.addEventListener('paste',function(e){
       if(!_pvFilteredRows||_r>=_pvFilteredRows.length)return;
       var _row=_pvFilteredRows[_r];
       if(_c===2){
-        var _old=_row[2]||'', _bon=_old.indexOf(' <본방>')>=0;
-        _row[2]=_one+(_bon?' <본방>':'');
+        _row[2]=_progWithTags(_one,_progTags(_row[2]));
         if(typeof syncProgFull==='function'){try{syncProgFull();}catch(_e){}}
       } else if(_c===18){
         if(typeof _pvApplyDateEdit==='function'&&_pvApplyDateEdit(_row,_one)){} else _row[18]=_one;
       } else if(_c===41){
         _row[41]=(_one==='본방'||_one==='1')?1:(_one===''?'':0);
-        var _pn=String(_row[2]||''),_hb=_pn.indexOf(' <본방>')>=0;
-        if(_row[41]===1&&!_hb)_row[2]=_pn+' <본방>';
-        else if(_row[41]!==1&&_hb)_row[2]=_pn.replace(/ <본방>$/,'');
+        _row[2]=_progSetBonbang(String(_row[2]||''),_row[41]===1);
       } else if(_c===3){
         _row[3]=_one;
         for(var _d=0;_d<7;_d++)_row[11+_d]=(_PV_DOW[_d]===_one)?1:0;
@@ -8546,20 +8936,23 @@ document.addEventListener('paste',function(e){
       val=val.trim();
       if(colIdx===2){
         var oldName=frow[2]||'';
-        var isBonbang=oldName.indexOf(' <본방>')>=0;
-        var oldBase=oldName.replace(/ <본방>$/,'');
+        var _tags=_progTags(oldName);
+        var oldBase=_progBase(oldName);
         if(val!==oldBase){
           if(_liveRows){for(var _ui=1;_ui<_liveRows.length;_ui++){if(_liveRows[_ui]===frow){_pushProgUndo(_ui-1,oldName);break;}}}
           progNameMap[oldBase]=val;
-          frow[2]=val+(isBonbang?' <본방>':'');
+          frow[2]=_progWithTags(val,_tags);
         }
       } else if(colIdx===41){
         var newBon=(val==='본방'||val==='1')?1:0;
         frow[41]=newBon;
-        var pn=String(frow[2]||'');
-        var had=pn.indexOf(' <본방>')>=0;
-        if(newBon&&!had)frow[2]=pn+' <본방>';
-        else if(!newBon&&had)frow[2]=pn.replace(/ <본방>$/,'');
+        frow[2]=_progSetBonbang(String(frow[2]||''),!!newBon);
+      } else if(colIdx===3){
+        frow[3]=val;
+        for(var _pd=0;_pd<7;_pd++)frow[11+_pd]=(_PV_DOW[_pd]===val)?1:0;
+        frow[31]=(val==='토'||val==='일')?'주말':(val?'주중':'');
+      } else if(colIdx===0){
+        frow[0]=val; frow[29]=getBroadcastType(val);
       } else {
         frow[colIdx]=val;
       }
@@ -8889,13 +9282,9 @@ function pvHeaderMenu(e,colIdx){
   var bApply=document.createElement('button'); bApply.textContent='적용'; bApply.style.cssText='flex:1;padding:5px;border:none;border-radius:5px;background:#0068b5;color:#fff;font-weight:700;cursor:pointer'; bApply.onclick=function(){pvHdrApply();};
   var bCancel=document.createElement('button'); bCancel.textContent='취소'; bCancel.style.cssText='flex:1;padding:5px;border:1px solid #ccc;border-radius:5px;background:#fff;cursor:pointer'; bCancel.onclick=function(){pvCloseHdrMenu();};
   actWrap.appendChild(bApply); actWrap.appendChild(bCancel); menu.appendChild(actWrap);
-  var bHide=document.createElement('button'); bHide.textContent='🚫 이 열 숨기기';
-  bHide.title='열 설정에서 체크 해제한 것과 같습니다';
-  bHide.style.cssText='width:100%;margin-top:7px;padding:5px;border:1px solid #ddd;border-radius:5px;background:#fafafa;color:#777;font-size:.68rem;cursor:pointer';
-  bHide.onclick=function(){ pvHideColumn(colIdx); };
-  menu.appendChild(bHide);
+  /* '이 열 숨기기' 버튼 제거(2026-08-25 요청) — 열 표시/숨김은 [열 설정]에서만 관리 */
   document.body.appendChild(menu);
-  var x=Math.min(e.clientX, window.innerWidth-250), y=Math.min(e.clientY, window.innerHeight-390);
+  var x=Math.min(e.clientX, window.innerWidth-250), y=Math.min(e.clientY, window.innerHeight-350);
   menu.style.left=Math.max(6,x)+'px'; menu.style.top=Math.max(6,y)+'px';
   document.addEventListener('keydown',_pvHdrEsc,true);
   setTimeout(function(){ document.addEventListener('mousedown',_pvHdrOutside,true); },0);
@@ -8906,15 +9295,10 @@ function pvHdrSort(dir){ if(_pvHdrMenuCol==null)return; var col=_pvHdrMenuCol; _
 function pvHdrFilterList(q){ q=(q||'').toLowerCase(); document.querySelectorAll('#pvHdrList .pv-hdr-item').forEach(function(l){ if(l.classList.contains('pv-hdr-master'))return; l.style.display=(l.textContent.toLowerCase().indexOf(q)>=0)?'flex':'none'; }); }
 function pvHdrMasterToggle(cb){ pvHdrCheckAll(cb.checked); }
 function pvHdrCheckAll(state){ document.querySelectorAll('#pvHdrList .pv-hdr-item').forEach(function(l){ if(l.style.display!=='none'){ var cb=l.querySelector('.pv-hdr-val'); if(cb)cb.checked=state; } }); }
-/* 열 숨기기 = 열 설정에서 해제한 것과 동일 */
+/* 열 숨기기 기능 해제(2026-08-25) — 헤더 메뉴에서 제거했고, 남은 호출부가 있어도 동작하지 않는다.
+   열 표시/숨김은 [열 설정] 팝업에서만 변경한다. */
 function pvHideColumn(colIdx){
-  if(!_colConfig||!_colConfig.length)_colConfig=_defaultColConfig();
-  if(_colConfig.length<=1){ alert('마지막 열은 숨길 수 없습니다.'); return; }
-  if(typeof _pvPushUndo==='function')_pvPushUndo();
-  _colConfig=_colConfig.filter(function(c){return c!==colIdx;});
   if(typeof pvCloseHdrMenu==='function')pvCloseHdrMenu();
-  if(typeof syncSettingsQuiet==='function')syncSettingsQuiet();
-  renderLivePreview();
 }
 function pvHdrApply(){
   if(_pvHdrMenuCol==null){ pvCloseHdrMenu(); return; }
@@ -8983,7 +9367,7 @@ function frApply(){
 /* ── 정렬 비교(요일 월~일 / 시간 분단위 / 숫자 / 로캘) ── */
 var _pvColl=(function(){ try{ return new Intl.Collator('ko'); }catch(e){ return null; } })();
 function _pvCmpVal(col,av,bv){
-  if(col===2){ av=String(av==null?'':av).replace(/ <본방>$/,''); bv=String(bv==null?'':bv).replace(/ <본방>$/,''); }
+  if(col===2){ av=_progBase(av); bv=_progBase(bv); }
   if(col===3){ var o={'월':1,'화':2,'수':3,'목':4,'금':5,'토':6,'일':7}; return (o[String(av==null?'':av).trim()]||99)-(o[String(bv==null?'':bv).trim()]||99); }
   var sa=String(av==null?'':av).trim(), sb=String(bv==null?'':bv).trim();
   var tm=/^\d{1,2}:\d{2}$/;
@@ -9028,7 +9412,17 @@ function _pvBindDelegation(){
 
   wrap.addEventListener('mousedown',function(e){
     if(e.target&&e.target.classList&&e.target.classList.contains('pv-rowcheck')){ e.stopPropagation(); return; }
-    if(e.target&&e.target.tagName==='SELECT')return;
+    if(e.target&&e.target.tagName==='SELECT'){
+      /* 드롭다운 셀도 '셀'로 선택되게 한다(2026-08-25) — 그래야 Ctrl+C / Ctrl+V가 먹는다.
+         · 그냥 클릭 = 셀 선택 + 드롭다운 열림(기존 동작 유지)
+         · Shift/Ctrl 클릭 = 드롭다운을 열지 않고 범위 선택만 */
+      var sc=td(e);
+      if(!sc||sc.getAttribute('data-col')==null)return;
+      var ranging=(e.shiftKey||e.ctrlKey||e.metaKey);
+      if(ranging){ e.preventDefault(); try{ e.target.blur(); }catch(_e){} }
+      pvCellMouseDown(e,sc);
+      return;
+    }
     var c=td(e); if(!c)return;
     if(c.classList.contains('pv-row-num'))return;
     pvCellMouseDown(e,c);
@@ -9058,7 +9452,7 @@ function pvPinColWidths(){
   ths.forEach(function(th,i){ th.style.width=ws[i]+'px'; });
 }
 /* ── 헤더 팝업 ESC 닫기 ── */
-function _pvColVal(col,v){ var s=String(v==null?'':v); if(col===2)s=s.replace(/ <본방>$/,''); return s; }
+function _pvColVal(col,v){ var s=String(v==null?'':v); if(col===2)s=_progBase(s); return s; }
 
 /* ── 날짜 편집 전파: 편집한 MM/DD로 요일·주차·시작일/종료일/집행일·월~일·1W~6W 재계산 ── */
 function _pvInferYear(mo,dy){
@@ -9300,11 +9694,11 @@ function _initCprpOnSettingsOpen(){
   if(spBody){
     spBody.innerHTML=mappingRules.map(function(r,i){
       return'<tr><td class="row-num">'+(i+1)+'</td>'
-        +'<td><input class="map-input" value="'+esc(r.fileIncludes||'')+'" oninput="mappingRules['+i+'].fileIncludes=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-        +'<td><input class="map-input" value="'+esc(r.sheetIncludes||'')+'" oninput="mappingRules['+i+'].sheetIncludes=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-        +'<td><input class="map-input" value="'+esc(r.pp||'')+'" oninput="mappingRules['+i+'].pp=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-        +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="mappingRules['+i+'].channel=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-        +'<td><button class="btn-del-row" onclick="mappingRules.splice('+i+',1);_initCprpOnSettingsOpen()">x</button></td>'
+        +'<td><input class="map-input" value="'+esc(r.fileIncludes||'')+'" oninput="mappingRules['+i+'].fileIncludes=this.value;applyMappingChange()"></td>'
+        +'<td><input class="map-input" value="'+esc(r.sheetIncludes||'')+'" oninput="mappingRules['+i+'].sheetIncludes=this.value;applyMappingChange()"></td>'
+        +'<td><input class="map-input" value="'+esc(r.pp||'')+'" oninput="mappingRules['+i+'].pp=this.value;applyMappingChange()"></td>'
+        +'<td><input class="map-input" value="'+esc(r.channel||'')+'" oninput="mappingRules['+i+'].channel=this.value;applyMappingChange()"></td>'
+        +'<td style="white-space:nowrap">'+_ruleOrderBtns('map',i,mappingRules.length)+'<button class="btn-del-row" onclick="mappingRules.splice('+i+',1);_initCprpOnSettingsOpen();applyMappingChange()">x</button></td>'
         +'</tr>';
     }).join('');
   }
@@ -9313,9 +9707,9 @@ function _initCprpOnSettingsOpen(){
   if(spSoaked){
     spSoaked.innerHTML=soakedRules.map(function(r,i){
       return'<tr><td class="row-num">'+(i+1)+'</td>'
-        +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="soakedRules['+i+'].fileKeyword=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-        +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="soakedRules['+i+'].label=this.value;_liveRows=null;syncSettingsQuiet();renderLivePreview()"></td>'
-        +'<td><button class="btn-del-row" onclick="soakedRules.splice('+i+',1);_initCprpOnSettingsOpen()">x</button></td>'
+        +'<td><input class="map-input" value="'+esc(r.fileKeyword||'')+'" oninput="soakedRules['+i+'].fileKeyword=this.value;applyMappingChange()"></td>'
+        +'<td><input class="map-input" value="'+esc(r.label||'')+'" oninput="soakedRules['+i+'].label=this.value;applyMappingChange()"></td>'
+        +'<td style="white-space:nowrap">'+_ruleOrderBtns('soaked',i,soakedRules.length)+'<button class="btn-del-row" onclick="soakedRules.splice('+i+',1);_initCprpOnSettingsOpen();applyMappingChange()">x</button></td>'
         +'</tr>';
     }).join('');
   }
@@ -9761,7 +10155,8 @@ renderProgNameMapTable();
 updateBtn();
 _initDropzone();
 try{(function(){var sm=document.getElementById('setupModal');if(sm)sm.style.display='none';var ma=document.getElementById('mainApp');if(ma)ma.style.display='flex';var ps=document.getElementById('previewSection');if(ps)ps.style.display='flex';var bb=document.getElementById('bannerBar');if(bb)bb.style.display='';})();}catch(e){console.warn('startup',e);}
-// Auto-load removed: user chooses on startup screen
+try{ _offerAutoRestore(); }catch(e){ console.warn('offerRestore',e); }
+// 자동 복원은 하지 않고, 이전 데이터가 있으면 하단 안내바로 복원 여부를 물어본다(2026-08-25)
 </script>
 
 

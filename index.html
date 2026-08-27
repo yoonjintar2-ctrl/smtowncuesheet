@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Q-Mate v3.5.0 - 방송사 큐시트 관리 사이트</title>
-<script>window.QM_VERSION='v3.5.0 / 2026-08-26';</script>
+<title>Q-Mate v3.5.1 - 방송사 큐시트 관리 사이트</title>
+<script>window.QM_VERSION='v3.5.1 / 2026-08-27';</script>
 <script>
 /* ═══ 시작 오류 수집기 (2026-08-25) ═══
    예전에는 스크립트가 어디서든 한 번 죽으면 mainApp이 display:none인 채로 남아
@@ -458,7 +458,7 @@ tr.pv-highlight-on td{background:rgba(251,191,36,.18)!important}
 .pv-tbl{border-collapse:collapse;width:auto;background:#fff;table-layout:auto;min-width:100%}
 .pv-tbl th{background:#e0e0e0;color:#222;font-weight:700;padding:4px 6px;border:1px solid #ccc;white-space:nowrap;font-size:.72rem;text-align:center;position:sticky;top:0;z-index:2;cursor:pointer;user-select:none}
 .pv-tbl th:hover{background:#d4d4d4}
-.pv-tbl td{padding:2px 6px;border:1px solid #ccc;white-space:nowrap;color:#111;font-size:.72rem;background:#fff}
+.pv-tbl td{padding:2px 6px;border:1px solid #ccc;white-space:nowrap;color:#111;font-size:.72rem;background:#fff;overflow:hidden;text-overflow:ellipsis}
 .pv-tbl tbody tr:nth-child(even) td{background:#fff}
 .pv-tbl tr:hover td{background:#f0f4ff!important}
 .pv-tbl td.num-cell{text-align:right;font-variant-numeric:tabular-nums}
@@ -826,7 +826,7 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
           <button id="pvRedoBtn" onclick="pvRedo()" disabled class="pv-tbtn" style="opacity:.4;cursor:default" title="다시실행 (Ctrl+Y)">↷ 다시실행</button>
           <button onclick="pvAddRow()" class="pv-tbtn" title="빈 행을 직접 추가합니다">＋ 행 추가</button>
           <button id="pvDeleteCheckedBtn" onclick="pvDeleteCheckedRows()" disabled class="pv-tbtn" style="opacity:.5;cursor:default" title="맨 왼쪽 체크박스로 선택한 행을 삭제합니다">－ 행 삭제</button>
-          <button onclick="openFindReplace()" class="pv-tbtn" title="열 값 찾아 바꾸기">찾아바꾸기</button>
+          <button onclick="openFindReplace()" class="pv-tbtn" title="열 값 찾아 바꾸기 (Ctrl+F)">찾아바꾸기</button>
           <button onclick="pvResetAllFilters()" class="pv-tbtn">필터 해제</button>
           <button onclick="openColConfig()" class="pv-tbtn">열 설정</button>
           <span id="previewRowCount" style="font-size:.69rem;color:var(--muted);flex:1 1 auto;min-width:200px;white-space:normal;line-height:1.5"></span>
@@ -1930,6 +1930,7 @@ var TM={
   program:{l:'프로그램명',c:'#c084fc'},cmposition:{l:'CM위치',c:'#f472b6'},cmpos_ex:{l:'CM위치(조선/채널A)',c:'#ec4899'},
   pib_col:{l:'PIB열',c:'#db2777'},grade:{l:'시급',c:'#22d3ee'},duration:{l:'초수',c:'#a78bfa'},
   unitprice:{l:'단가',c:'#4ade80'},count:{l:'횟수',c:'#5b6af5'},
+  cheong_unitprice:{l:'청약금액(단가)',c:'#34d399'},amount_split:{l:'금액(방송/보너스)',c:'#94a3b8'},
 };
 WDAYS.forEach(function(d){TM['wd_'+d]={l:'요일열('+d+')',c:'#6366f1'};});
 
@@ -2418,6 +2419,35 @@ function classifySheet(rawData,fileName){
     }
   }
 
+  /* ═══ SBS 지상파 큐시트: 단가 = '청약금액' (2026-08-27 사용자 확정) ═══
+     이 양식에는 금액 열이 셋이다 — 청약금액(정가) = 방송금액(유상분) + 보너스금액(무상분).
+     세 열 모두 헤더 판정에서 unitprice가 아니라, 아래 숫자 패턴 폴백이
+     '남은 첫 숫자 열'인 **보너스금액**을 단가로 집어가고 있었다
+     (그래서 단가 합계가 청약 1,371,000,000이 아니라 보너스 1,254,000,000으로 나왔다).
+     → 청약금액을 단가로 명시 지정하고, 방송금액·보너스금액은 폴백이 손대지 못하게 막는다.
+     ⚠ 적용 범위는 SBS 지상파 파일로 한정(사용자 확정). 채널 판정은 앱의 매핑 규칙
+       (lookupPC)을 그대로 쓰므로 'SBS 플러스' 같은 케이블 계열은 자동으로 제외된다. */
+  (function(){
+    try{
+      if(typeof lookupPC!=='function')return;
+      var pc=lookupPC(fn,'');
+      if(!pc||pc.channel!=='SBS')return;
+      if(typeof getBroadcastType==='function'&&getBroadcastType(pc.channel)!=='지상파')return;
+      var iCheong=-1;
+      for(var k=0;k<n;k++){
+        var hk=T(headers[k]).replace(/\s+/g,'');
+        if(hk==='청약금액'){ if(iCheong<0)iCheong=k; }
+        else if(hk==='방송금액'||hk==='보너스금액'){ types[k]='amount_split'; }
+      }
+      if(iCheong<0)return;
+      types[iCheong]='cheong_unitprice';
+      /* 단가와 동일하게 '천원' 단위 표기도 반영 */
+      var fullH=T(headers[iCheong]);
+      if(fullH.indexOf('천원')>=0){mults[iCheong]=1000;}
+      else{for(var pi=0;pi<preRows.length;pi++){if(T((preRows[pi]||[])[iCheong]).indexOf('천원')>=0){mults[iCheong]=1000;break;}}}
+    }catch(e){window._qmSoft&&window._qmSoft('classifySheet-SBS청약금액',e);}
+  })();
+
   var smp=headers.map(function(_,ci){
     var arr=[];
     for(var ri=0;ri<Math.min(SCAN,dataRows.length);ri++){var v=T((dataRows[ri]||[])[ci]);if(v)arr.push(v);}
@@ -2512,6 +2542,17 @@ function processRow(row,colInfo,fileName){
       case'jisangpa_gubn':if(!jisangpaGubn)jisangpaGubn=v;break;
       case'jisangpa_gubn2':if(!jisangpaGubn2)jisangpaGubn2=v;break;
       case'cheong_amount':if(isTerrestrialFile&&!cheongAmt){var ca=v.replace(/,/g,'').replace(/\.0*$/,'');if(/^\d+$/.test(ca)&&+ca>0)cheongAmt=Math.round(+ca*mults[ci]);}break;
+      /* SBS 지상파: 청약금액 = 단가. 편성분석표용 cheongAmt도 같은 값으로 채운다. */
+      case'cheong_unitprice':{
+        var cu=v.replace(/,/g,'').replace(/\.0*$/,'');
+        if(/^\d+$/.test(cu)){
+          var cn=Math.round(+cu*mults[ci]);
+          if(cn>0){ if(price==='')price=cn; if(!cheongAmt)cheongAmt=cn; }
+        }
+        break;
+      }
+      /* 방송금액·보너스금액 = 청약금액을 유상/무상으로 쪼갠 값. 단가가 아니므로 읽지 않는다. */
+      case'amount_split':break;
       default:if(t.slice(0,3)==='wd_'){var day=t.slice(3);if(wd.hasOwnProperty(day)&&!wd[day])wd[day]=v;}
     }
   }
@@ -5249,15 +5290,59 @@ function filterLiveRowsByPV(body){
     return true;
   });
 }
-/* ═══ 미리보기 페이지네이션 (v3.4.8) ═══════════════════════════════
-   · PAGE_SIZE가 renderLivePreview()의 지역 var라서 pvInsertRowAt 등
-     바깥 함수가 참조하면 ReferenceError가 났다 → 전역으로 승격.
-   · 표의 data-row는 "페이지 안에서의 순번"이다. 이걸 _pvFilteredRows
-     (= 필터된 전체 배열)에 그대로 넣으면 2페이지부터 엉뚱한 행을
-     건드린다. 변환은 반드시 _pvAbsIdx()/_pvRowAt()만 쓸 것. */
-var PV_PAGE_SIZE=1000;
-function _pvAbsIdx(ri){ ri=+ri; if(!isFinite(ri))return -1; return ri+(_pvPage||0)*PV_PAGE_SIZE; }
+/* ═══ 미리보기 행 인덱스 (v3.5.1 — 페이지 나눔 폐지) ═══════════════
+   v3.4.8~v3.5.0은 1,000행씩 페이지를 나눴다. 사용자 요청으로 페이지를 없애고
+   필터에 걸린 전체 행을 한 화면에 그린다. 이제 표의 data-row = 전체 인덱스라
+   보정이 필요 없지만, 호출부가 많아 _pvAbsIdx()/_pvRowAt()는 그대로 남긴다.
+   ⚠ 앞으로도 data-row를 _pvFilteredRows에 직접 넣지 말고 _pvRowAt()을 쓸 것
+     (다시 페이지를 나누게 되면 여기만 고치면 된다). */
+var PV_PAGE_SIZE=Infinity;
+function _pvAbsIdx(ri){ ri=+ri; if(!isFinite(ri))return -1; return ri; }
 function _pvRowAt(ri){ var a=_pvAbsIdx(ri); return (_pvFilteredRows&&a>=0&&a<_pvFilteredRows.length)?_pvFilteredRows[a]:null; }
+
+/* ═══ 열 폭 캐시 — 표를 처음부터 table-layout:fixed 로 그리기 위한 값 ═══
+   auto 레이아웃은 셀 수에 비례해 폭을 재느라 5,000행에서 2초, 20,000행에서
+   20초 넘게 메인 스레드를 잡아먹는다(실측). 헤더+앞부분 표본으로 폭을 한 번만
+   재서 캐시하고, 본 렌더는 colgroup에 그 폭을 박아 fixed 로 그린다.
+   사용자가 열 경계를 끌어 조정한 폭(_pvColWidths)은 항상 우선한다. */
+var _pvWidthCache=null,_pvWidthKey='';
+var PV_WIDTH_SAMPLE=400;      /* 폭 측정에 쓰는 행 수 */
+function _pvWidthsFor(colSel){
+  if(!_pvWidthCache||_pvWidthKey!==colSel.join(','))return null;
+  return _pvWidthCache.map(function(w,i){
+    /* i=0 은 행번호/체크박스 칸, i>=1 이 데이터 열(ci = i-1) */
+    var uw=(i>0&&_pvColWidths)?_pvColWidths[i-1]:0;
+    return (uw&&uw>0)?uw:w;
+  });
+}
+function _pvColgroupHTML(ws){
+  return '<colgroup>'+ws.map(function(w){return '<col style="width:'+w+'px">';}).join('')+'</colgroup>';
+}
+
+/* ═══ 초대량 행 안전장치 (v3.5.1) ═══════════════════════════════
+   페이지 나눔은 없앴다. 다만 셀이 수십만 개가 되면 DOM 레이아웃만으로
+   10초 넘게 멈추므로(실측 20,000행 15초), 아주 많을 때만 우선 일부를 그리고
+   스크롤이 바닥에 닿을 때마다 이어 붙인다. 버튼을 눌러 넘기는 게 아니라
+   계속 스크롤되는 방식이라 '페이지'는 아니다.
+   ⚠ 이어 붙인 행도 data-row = 전체 인덱스라 편집·선택 로직은 그대로 유효하다. */
+var PV_RENDER_CAP=3000;      /* 이 이하면 전부 한 번에 (실측 3,000행 ≈ 1.5초) */
+var PV_RENDER_CHUNK=2000;    /* 넘으면 이만큼씩 이어 붙임 */
+var _pvPendingHTML=null, _pvShownCount=0, _pvCountBase='';
+function _pvUpdateShownLabel(){
+  var rc=document.getElementById('previewRowCount'); if(!rc)return;
+  var left=_pvPendingHTML?_pvPendingHTML.length:0;
+  rc.textContent=_pvCountBase+(left>0?('   ▾ '+_pvShownCount.toLocaleString()+'행 표시 중 · 스크롤하면 이어서 불러옵니다'):'');
+}
+function _pvAppendMore(){
+  try{
+    if(!_pvPendingHTML||!_pvPendingHTML.length)return;
+    var tbody=document.querySelector('#previewTableWrap .pv-tbl tbody'); if(!tbody)return;
+    var chunk=_pvPendingHTML.splice(0,PV_RENDER_CHUNK);
+    tbody.insertAdjacentHTML('beforeend',chunk.join(''));
+    _pvShownCount+=chunk.length;
+    _pvUpdateShownLabel();
+  }catch(e){window._qmSoft&&window._qmSoft('_pvAppendMore',e);}
+}
 function renderLivePreview(){
   var loaded=files.filter(function(f){return f.status==='loaded';}).length;
   if(!loaded&&!_liveRows)return;
@@ -5293,15 +5378,12 @@ function renderLivePreview(){
   // 캘린더 탭이 열려 있으면 동일한 필터 상태로 같이 새로고침
   var _cpEl=document.getElementById('calendarPage');
   if(_cpEl&&_cpEl.style.display!=='none')renderCalendarTab();
-  var PAGE_SIZE=PV_PAGE_SIZE;
-  var totalPages=Math.max(1,Math.ceil(filtRows.length/PAGE_SIZE));
-  if(_pvPage>=totalPages)_pvPage=totalPages-1;
-  if(_pvPage<0)_pvPage=0;
-  var visRows=filtRows.slice(_pvPage*PAGE_SIZE,(_pvPage+1)*PAGE_SIZE);
+  /* v3.5.1 — 페이지 나눔 없음: 필터에 걸린 전체 행을 그린다 */
+  var totalPages=1;
+  _pvPage=0;
+  var visRows=filtRows;
   var rc=document.getElementById('previewRowCount');
   if(rc){
-    var fromRow=_pvPage*PAGE_SIZE+1;
-    var toRow=Math.min((_pvPage+1)*PAGE_SIZE,filtRows.length);
     var _totalCntSum=0,_totalPriceSum=0,_minDate='',_maxDate='';
     var _cmSum={'중CM':0,'PIB':0,'전후CM':0};
     var _durSum={};
@@ -5337,11 +5419,12 @@ function renderLivePreview(){
       var _pct=_totalCntSum>0?Math.round((_durSum[k]||0)/_totalCntSum*100):0;
       return k+' '+_pct+'%';
     });
-    rc.textContent=filtRows.length+'행 총  ('+fromRow+'~'+toRow+' 표시 · '+(_pvPage+1)+'/'+totalPages+'페이지)'
+    _pvCountBase=filtRows.length.toLocaleString()+'행'
       +'  |  횟수 합계: '+_totalCntSum.toLocaleString()+'회'
       +'  |  단가 합계: '+_totalPriceSum.toLocaleString()+'원'
       +(dateRangeStr?'  |  '+dateRangeStr:'')
       +'  |  소재 초수별 비중: '+durParts.join(' / ');
+    rc.textContent=_pvCountBase;   /* 이어붙이기 안내는 렌더 뒤 _pvUpdateShownLabel()이 덧붙인다 */
   }
   // Auto-expand
   var previewBody=document.getElementById('previewBody');
@@ -5366,9 +5449,9 @@ function renderLivePreview(){
       +'<span class="col-resizer" onmousedown="pvResizeStart(event,'+ci+')" onclick="event.stopPropagation()"></span>'
       +'</th>';
   }).join('');
-  var _pvPageOffset=_pvPage*PAGE_SIZE;
+  var _pvPageOffset=0;   /* 페이지 나눔 폐지 — data-row가 곧 전체 인덱스 */
   if(_pvCheckedRows&&_pvCheckedRows.size&&_liveRows){var _validSet=new Set(_liveRows);_pvCheckedRows.forEach(function(r){if(!_validSet.has(r))_pvCheckedRows.delete(r);});}
-  var tb=visRows.map(function(row,ri){
+  var tbArr=visRows.map(function(row,ri){
     var origProg=row[2]; // OUT_COLS index 2 = 프로그램명
     var globalRowNum=_pvPageOffset+ri+1;
     return'<tr data-ri="'+ri+'" class="'+(_pvCheckedRows&&_pvCheckedRows.has(row)?'pv-checked-row':'')+'"><td class="pv-row-num" data-row="'+ri+'" style="background:#f0f0f5;text-align:center;padding:2px 3px;user-select:none;border-right:2px solid #ccc;min-width:32px;position:sticky;left:0;z-index:1"><input type="checkbox" class="pv-rowcheck" data-absidx="'+(_pvPageOffset+ri)+'"'+(_pvCheckedRows&&_pvCheckedRows.has(row)?' checked':'')+' style="cursor:pointer;margin:0;vertical-align:middle"></td>'+colSel.map(function(i){
@@ -5400,29 +5483,40 @@ function renderLivePreview(){
       }
       return'<td class="pv-editable-cell" data-row="'+ri+'" data-col="'+i+'">'+esc(String(v))+'</td>';
     }).join('')+'</tr>';
-  }).join('');
+  });
+  /* 행이 아주 많을 때만 나눠 붙인다(그 외엔 전부 한 번에) */
+  var _cap=Math.min(tbArr.length,PV_RENDER_CAP);
+  _pvPendingHTML=(tbArr.length>_cap)?tbArr.slice(_cap):null;
+  _pvShownCount=_cap;
+  var tb=tbArr.slice(0,_cap).join('');
   // Render pagination OUTSIDE the scrollable table wrap
   var pgBar=document.getElementById('previewPaginationTop');
   var pgInline=document.getElementById('previewPagerInline');
   if(pgBar)pgBar.style.display='none'; // always hide old bar
   if(pgInline){
-    if(totalPages>1){
-      var prev=_pvPage>0?'<button onclick="pvGoPage('+(_pvPage-1)+')" style="padding:4px 16px;background:#fff;border:1.5px solid #aaa;border-radius:5px;cursor:pointer;font-size:.78rem;font-weight:700">◀ 이전</button>':'<button disabled style="padding:4px 16px;background:#f5f5f5;border:1px solid #ddd;border-radius:5px;font-size:.78rem;color:#bbb">◀ 이전</button>';
-      var next=_pvPage<totalPages-1?'<button onclick="pvGoPage('+(_pvPage+1)+')" style="padding:4px 16px;background:#fff;border:1.5px solid #aaa;border-radius:5px;cursor:pointer;font-size:.78rem;font-weight:700">다음 ▶</button>':'<button disabled style="padding:4px 16px;background:#f5f5f5;border:1px solid #ddd;border-radius:5px;font-size:.78rem;color:#bbb">다음 ▶</button>';
-      /* 페이지 크기를 줄이면서 페이지 수가 늘었으므로 직접 이동 수단을 준다 */
-      var first=_pvPage>0?'<button onclick="pvGoPage(0)" title="첫 페이지" style="padding:4px 9px;background:#fff;border:1.5px solid #aaa;border-radius:5px;cursor:pointer;font-size:.78rem;font-weight:700">◀◀</button>':'<button disabled style="padding:4px 9px;background:#f5f5f5;border:1px solid #ddd;border-radius:5px;font-size:.78rem;color:#bbb">◀◀</button>';
-      var last=_pvPage<totalPages-1?'<button onclick="pvGoPage('+(totalPages-1)+')" title="마지막 페이지" style="padding:4px 9px;background:#fff;border:1.5px solid #aaa;border-radius:5px;cursor:pointer;font-size:.78rem;font-weight:700">▶▶</button>':'<button disabled style="padding:4px 9px;background:#f5f5f5;border:1px solid #ddd;border-radius:5px;font-size:.78rem;color:#bbb">▶▶</button>';
-      var pageInfo='<span style="font-size:.78rem;font-weight:600;color:#444;margin:0 10px">'
-        +'<input id="pvPageJump" type="number" min="1" max="'+totalPages+'" value="'+(_pvPage+1)+'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();pvJumpPage(this.value);}" onchange="pvJumpPage(this.value)" title="페이지 번호를 입력하고 Enter" style="width:56px;padding:3px 4px;border:1.5px solid #aaa;border-radius:4px;font-size:.78rem;font-weight:700;text-align:center">'
-        +' / '+totalPages+' 페이지 &nbsp;·&nbsp; 전체 '+filtRows.length.toLocaleString()+'행</span>';
-      var undoBtn=_progUndoStack.length?'<button onclick="pvUndoProg()" style="margin-left:12px;padding:3px 12px;background:#f59e0b;color:#fff;border:none;border-radius:5px;font-size:.72rem;font-weight:600;cursor:pointer" title="Ctrl+Z">↩ 되돌리기 ('+_progUndoStack.length+')</button>':'';
-      pgInline.innerHTML=first+prev+pageInfo+next+last+undoBtn;
-    } else {
-      pgInline.innerHTML='';
-    }
+    /* v3.5.1 — 페이지 나눔 폐지로 이전/다음/페이지번호 버튼은 없앴다.
+       이 자리에 남는 건 [되돌리기]뿐. */
+    pgInline.innerHTML=_progUndoStack.length
+      ?'<button onclick="pvUndoProg()" style="padding:3px 12px;background:#f59e0b;color:#fff;border:none;border-radius:5px;font-size:.72rem;font-weight:600;cursor:pointer" title="Ctrl+Z">↩ 되돌리기 ('+_progUndoStack.length+')</button>'
+      :'';
   }
-  wrap.innerHTML='<table class="pv-tbl"><thead><tr>'+th+'</tr></thead><tbody>'+tb+'</tbody></table>';
-  if(typeof pvPinColWidths==='function')pvPinColWidths();
+  /* 폭 캐시가 없으면(첫 렌더·열 구성 변경) 표본 행만 auto로 그려 폭을 재고 캐시한다.
+     그 다음 본 표는 colgroup+fixed로 그리므로 전체 셀을 재는 비용이 사라진다. */
+  var _ws=_pvWidthsFor(colSel);
+  if(!_ws){
+    wrap.innerHTML='<table class="pv-tbl"><thead><tr>'+th+'</tr></thead><tbody>'+tbArr.slice(0,PV_WIDTH_SAMPLE).join('')+'</tbody></table>';
+    try{
+      var _mths=wrap.querySelectorAll('thead th'), _arr=[];
+      for(var _wi=0;_wi<_mths.length;_wi++)_arr.push(Math.max(28,Math.ceil(_mths[_wi].offsetWidth)));
+      if(_arr.length){ _pvWidthCache=_arr; _pvWidthKey=colSel.join(','); }
+    }catch(e){window._qmSoft&&window._qmSoft('renderLivePreview-폭측정',e);}
+    _ws=_pvWidthsFor(colSel);
+  }
+  wrap.innerHTML='<table class="pv-tbl"'+(_ws?' style="table-layout:fixed;width:auto"':'')+'>'
+    +(_ws?_pvColgroupHTML(_ws):'')
+    +'<thead><tr>'+th+'</tr></thead><tbody>'+tb+'</tbody></table>';
+  if(!_ws&&typeof pvPinColWidths==='function')pvPinColWidths();
+  _pvUpdateShownLabel();
   try{ _pvBindDelegation(); }catch(e){window._qmSoft&&window._qmSoft('_fmtMD',e);}
   try{ if(typeof updateBtn==='function')updateBtn(); }catch(e){window._qmSoft&&window._qmSoft('_fmtMD#2',e);}   /* 데이터가 생기면 엑셀 다운로드 활성화 */
   updateStatusLog();
@@ -9192,6 +9286,24 @@ document.addEventListener('keydown',function(e){
     // Clear selection
     if(_pvSelectedCells.length){pvClearSelection();e.preventDefault();return;}
   }
+  /* ═══ Ctrl+F : 브라우저 기본 찾기 대신 앱의 [찾아바꾸기] (2026-08-27) ═══
+     셀 선택 여부와 무관하게 동작해야 하므로 아래 '입력창이면 무시' 가드와
+     '선택된 셀 없으면 return' 보다 반드시 앞에 있어야 한다.
+     이미 열려 있으면 다시 열지 않고 찾을 값 입력칸에 포커스만 준다. */
+  if((e.ctrlKey||e.metaKey)&&(e.key==='f'||e.key==='F')&&!e.shiftKey&&!e.altKey){
+    var _ma=document.getElementById('mainApp');
+    if(_ma&&_ma.style.display!=='none'&&typeof openFindReplace==='function'){
+      e.preventDefault(); e.stopPropagation();
+      var _frp=document.getElementById('gp-findreplace');
+      var _wasOpen=!!(_frp&&_frp.classList.contains('open'));
+      if(!_wasOpen){ try{ openFindReplace(); }catch(_x){ window._qmSoft&&window._qmSoft('Ctrl+F',_x); } }
+      setTimeout(function(){
+        try{ var _fd=document.getElementById('frFind'); if(_fd){_fd.focus();_fd.select();} }catch(_x){}
+      },_wasOpen?0:50);
+      return;
+    }
+  }
+
   // Don't capture other keys when typing in input/textarea (but allow arrow keys to escape selects)
   var ae=document.activeElement;
   var isArrow=(e.key==='ArrowDown'||e.key==='ArrowUp'||e.key==='ArrowLeft'||e.key==='ArrowRight');
@@ -9946,6 +10058,12 @@ function _pvBindDelegation(){
     if(c.classList.contains('pv-row-num'))pvRowCtxMenu(e,c,ri(c));
     else pvCellContextMenu(e,c);
   });
+
+  /* 바닥 가까이 스크롤하면 다음 묶음을 이어 붙인다(행이 아주 많을 때만 동작) */
+  wrap.addEventListener('scroll',function(){
+    if(!_pvPendingHTML||!_pvPendingHTML.length)return;
+    if(wrap.scrollTop+wrap.clientHeight>=wrap.scrollHeight-800)_pvAppendMore();
+  },{passive:true});
 
   wrap.addEventListener('change',function(e){
     var el=e.target;

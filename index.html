@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Q-Mate v3.6.0 - 방송사 큐시트 관리 사이트</title>
-<script>window.QM_VERSION='v3.6.0 / 2026-09-09';</script>
+<title>Q-Mate v3.6.1 - 방송사 큐시트 관리 사이트</title>
+<script>window.QM_VERSION='v3.6.1 / 2026-09-09';</script>
 <script>
 /* ═══ 시작 오류 수집기 (2026-08-25) ═══
    예전에는 스크립트가 어디서든 한 번 죽으면 mainApp이 display:none인 채로 남아
@@ -1808,6 +1808,43 @@ function getWeekNum(year,month,day){
   return Math.floor((day-firstMon)/7)+2;
 }
 
+/* ═══ 주차 열 머리글 표기 통일 (2026-09-09) ═══════════════════════
+   예전에는 그 주에 데이터가 있으면 '9/14~9/20', 없으면 '1주차'로 나와서
+   한 표 안에 두 표기가 섞였다. 항상 'N주차(범위)'로 통일한다. */
+function _wkColLabel(wk,range){
+  var r=String(range==null?'':range).trim();
+  if(!r)return wk+'주차';
+  if(/^\d+\s*주차/.test(r))return r;            /* 이미 'N주차…' 형태면 그대로 */
+  return wk+'주차('+r+')';
+}
+/* 데이터가 없는 주차도 범위를 보여 주기 위해, 행들의 월에서 계산해 빈 칸을 채운다.
+   labels는 6칸 배열(0-based), rows는 OUT_COLS 형태의 행 배열. */
+function _fillWeekRanges(labels,rows){
+  try{
+    if(!labels||!rows||!rows.length)return labels;
+    var cnt={},firstDay={};
+    rows.forEach(function(r){
+      var m=String((r&&r[18])||'').match(/^\s*(\d{1,2})\s*\/\s*(\d{1,2})\s*$/);
+      if(!m)return;
+      var mo=+m[1]; cnt[mo]=(cnt[mo]||0)+1;
+      if(firstDay[mo]===undefined)firstDay[mo]=+m[2];
+    });
+    var mo=0,best=0;
+    Object.keys(cnt).forEach(function(k){ if(cnt[k]>best){best=cnt[k];mo=+k;} });
+    if(!mo)return labels;
+    var yr=(typeof _pvInferYear==='function')?_pvInferYear(mo,firstDay[mo]||1):(new Date()).getFullYear();
+    var dim=new Date(Date.UTC(yr,mo,0)).getUTCDate();
+    for(var w=0;w<6;w++){
+      if(labels[w])continue;
+      var rg=getWeekRangeStr(yr,mo,w+1);
+      /* 그 달에 존재하지 않는 주차(예: 9월 6주차)는 시작일이 말일을 넘는다 → 범위를 붙이지 않는다 */
+      var sm=String(rg).match(/^\d+\/(\d+)/);
+      if(sm&&+sm[1]>dim)continue;
+      labels[w]=rg;
+    }
+  }catch(e){window._qmSoft&&window._qmSoft('_fillWeekRanges',e);}
+  return labels;
+}
 function getWeekRangeStr(year,month,weekNum){
   var firstDOW=(new Date(Date.UTC(year,month-1,1)).getUTCDay()+6)%7;
   var daysInMonth=new Date(Date.UTC(year,month,0)).getUTCDate();
@@ -4324,6 +4361,14 @@ function pvTplOverwrite(nm){ if(!confirm('"'+nm+'" 템플릿을 현재 구성으
   t.cfg=JSON.parse(JSON.stringify(_pivotCfgInit()));
   if(typeof saveRulesToFile==='function'){try{saveRulesToFile(true);}catch(e){window._qmSoft&&window._qmSoft('pvTplOverwrite',e);}}
   _pvRenderTplPop(); showSaveToast&&showSaveToast('템플릿 저장: '+nm); }
+/* 드롭다운에서 고른 값 적용 — 빈 값이면 '템플릿 없음'으로만 표시하고 구성은 유지한다
+   (실수로 골라도 지금까지 만든 피벗이 날아가지 않게) */
+function pvTplPick(nm){
+  nm=String(nm||'');
+  if(!nm){ window._pvTplSelected=''; try{ renderSummaryTab(); }catch(e){window._qmSoft&&window._qmSoft('pvTplPick',e);} return; }
+  if(nm===(window._pvTplSelected||''))return;
+  pvTplApply(nm);
+}
 function pvTplApply(nm){ var t=(window._pivotTemplates||[]).filter(function(x){return x.name===nm;})[0]; if(!t)return;
   window._pivotCfg=JSON.parse(JSON.stringify(t.cfg)); window._pvTplSelected=nm; _pivotCfgInit(); renderSummaryTab(); _pvRenderTplPop(); }
 function pvTplDragStart(e,nm){ window._pvTplDrag=nm; if(e.dataTransfer)e.dataTransfer.effectAllowed='move'; }
@@ -4449,7 +4494,17 @@ function renderPivotBuilder(){
   h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px">';
   h+='<div style="font-weight:700;font-size:.82rem">🧮 피벗 요약 <span style="font-weight:400;color:#888;font-size:.7rem">· 현재 큐시트 필터 기준</span></div>';
   h+='<div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
-  h+='<button onclick="openPivotTemplates()" class="pv-tbtn" title="템플릿 저장 · 불러오기 · 삭제">템플릿 관리'+(curTpl?' <span style="color:#0068b5">· '+esc(curTpl)+'</span>':'')+'</button>';
+  /* 현재 적용 중인 템플릿을 바로 보여 주고, 고르면 즉시 전환된다(2026-09-09) */
+  var _tplList=window._pivotTemplates||[];
+  h+='<select id="pvTplSelect" onchange="pvTplPick(this.value)" title="적용할 템플릿 선택"'
+    +' style="padding:3px 6px;border:1px solid #bbb;border-radius:5px;font-size:.7rem;font-weight:600;max-width:190px;'
+    +(curTpl?'background:#eaf3fd;color:#0068b5;border-color:#8bb8e8':'background:#fff;color:#666')+'">';
+  h+='<option value=""'+(curTpl?'':' selected')+'>템플릿 없음(직접 구성)</option>';
+  _tplList.forEach(function(t){
+    h+='<option value="'+esc(t.name)+'"'+(t.name===curTpl?' selected':'')+'>'+esc(t.name)+'</option>';
+  });
+  h+='</select>';
+  h+='<button onclick="openPivotTemplates()" class="pv-tbtn" title="템플릿 저장 · 불러오기 · 삭제 · 순서 변경">템플릿 관리</button>';
   var sc=(cfg.sorts||[]).filter(function(x){return x&&x.key;}).length;
   var advN=sc+fc+((cfg.hideEmptyRows||cfg.hideEmptyCols)?1:0);
   h+='<button onclick="pivotExportExcel()" class="pv-tbtn">⬇ 엑셀 다운로드</button>';
@@ -4550,9 +4605,9 @@ function pivotExportExcel(){
   var gr=[]; for(var i=0;i<nf;i++)gr.push(i===0?'총합계':'');
   blocks.forEach(function(b){ b.leaves.forEach(function(lf,li){ gr.push(lf.num?cellOut(lf,b.colTot[li],b.grandByType[lf.v.type]||0):''); }); b.totCols.forEach(function(tc,ti){ gr.push((b.grandTotCols||[])[ti]||0); }); });
   aoa.push(gr);
-  var mx=0; aoa.forEach(function(r){ if(r&&r.length>mx)mx=r.length; });
-  var cols=[]; for(var i2=0;i2<mx;i2++)cols.push(i2<nf?18:13);
-  exportAOAStyled(aoa,merges,{cols:cols,headerRows:hdrN,name:'피벗',file:'피벗요약_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx'});
+  /* 폭은 내용에 맞춰 자동(예전 고정 18/13은 화면보다 훨씬 넓었다) */
+  exportAOAStyled(aoa,merges,{headerRows:hdrN,name:'피벗',minW:6,maxW:30,
+    file:'피벗요약_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx'});
 }
 function renderSummaryTab(){
   try{ syncSettingsQuiet(); }catch(e){window._qmSoft&&window._qmSoft('renderSummaryTab',e);}   /* 요약 설정도 계정에 저장 */
@@ -4743,9 +4798,7 @@ function analysisExportExcel(){
   try{
     var conv=_tableToAOA(tbl);
     if(!conv.aoa.length){showSaveToast('내보낼 내용이 없습니다.','warn');return;}
-    var maxc=0; conv.aoa.forEach(function(r){ if(r&&r.length>maxc)maxc=r.length; });
-    var cols=[]; for(var i=0;i<maxc;i++)cols.push(i<3?18:9);
-    exportAOAStyled(conv.aoa,conv.merges,{cols:cols,headerRows:conv.headerRows,name:'편성표',
+    exportAOAStyled(conv.aoa,conv.merges,{headerRows:conv.headerRows,name:'편성표',minW:6,maxW:34,
       file:'편성표_'+(typeof _todayISO==='function'?_todayISO():'')+'.xlsx'});
   }catch(e){ showSaveToast('엑셀 생성 실패: '+e.message,'err'); }
 }
@@ -4777,8 +4830,35 @@ function _tableToAOA(tbl){
   return {aoa:aoa,merges:merges,headerRows:headerRows||1};
 }
 
+/* 내용에 맞춰 열 너비를 계산한다(2026-09-09).
+   · 한글·전각 문자는 2칸으로 센다.
+   · 가로로 병합된 셀의 글자는 첫 열 폭을 부풀리므로 제외한다
+     (그러지 않으면 '주차 구분(숫자)' 같은 머리글 하나가 열을 통째로 넓힌다). */
+function _autoColWidths(aoa,merges,opts){
+  opts=opts||{};
+  var maxc=0; aoa.forEach(function(r){ if(r&&r.length>maxc)maxc=r.length; });
+  var skip={};
+  (merges||[]).forEach(function(m){ if(m.e.c>m.s.c)skip[m.s.r+'_'+m.s.c]=true; });
+  var minW=opts.minW||5, maxW=opts.maxW||34;
+  var out=[];
+  for(var c=0;c<maxc;c++){
+    var wide=0;
+    for(var r=0;r<aoa.length;r++){
+      if(skip[r+'_'+c])continue;
+      var v=(aoa[r]||[])[c];
+      if(v===''||v===undefined||v===null)continue;
+      var str=(typeof v==='number')?(Math.round(v)===v?Math.round(v).toLocaleString('en-US'):String(v)):String(v);
+      var len=0;
+      for(var i=0;i<str.length;i++)len+=(str.charCodeAt(i)>0x2E80)?2:1;
+      if(len>wide)wide=len;
+    }
+    out.push(Math.max(minW,Math.min(maxW,wide+2)));
+  }
+  return out;
+}
 /* ── ExcelJS 기반 내보내기 (SheetJS 무료판은 셀 서식 쓰기 미지원) ──
-   aoa: 2차원 배열 / merges: [{s:{r,c},e:{r,c}}] / opts:{cols:[wch],headerRows:n,name,file} */
+   aoa: 2차원 배열 / merges: [{s:{r,c},e:{r,c}}]
+   opts:{cols:[wch] 또는 생략(자동), headerRows:n, name, file, numFmt:false로 서식 끄기} */
 function exportAOAStyled(aoa,merges,opts){
   opts=opts||{};
   if(typeof ExcelJS==='undefined'){ _exportAOAFallback(aoa,merges,opts); return; }
@@ -4791,7 +4871,9 @@ function exportAOAStyled(aoa,merges,opts){
       try{ ws.mergeCells(m.s.r+1,m.s.c+1,m.e.r+1,m.e.c+1); mset[(m.s.r+1)+'_'+(m.s.c+1)]=true; }catch(e){window._qmSoft&&window._qmSoft('exportAOAStyled',e);}
     });
     var maxc=0; aoa.forEach(function(r){ if(r&&r.length>maxc)maxc=r.length; });
-    for(var i=1;i<=maxc;i++){ ws.getColumn(i).width=(opts.cols&&opts.cols[i-1])?opts.cols[i-1]:16; }
+    /* 폭을 따로 주지 않으면 내용에 맞춰 자동 계산 — 예전에는 전부 16이라 표가 지나치게 넓었다 */
+    var _cw=(opts.cols&&opts.cols.length)?opts.cols:_autoColWidths(aoa,merges,opts);
+    for(var i=1;i<=maxc;i++){ ws.getColumn(i).width=_cw[i-1]||10; }
     var hr=opts.headerRows||0;
     var thin={style:'thin',color:{argb:'FFD0D0D0'}};
     ws.eachRow({includeEmpty:true},function(row,rn){
@@ -4805,6 +4887,11 @@ function exportAOAStyled(aoa,merges,opts){
         } else {
           cell.font={size:10,name:'맑은 고딕'};
           if(opts.zebra&&rn%2===0)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF7F7F9'}};
+          /* 단가·금액 등 숫자는 천단위 구분 기호를 붙인다(웹 화면과 동일하게 보이도록) */
+          if(opts.numFmt!==false&&typeof cell.value==='number'&&isFinite(cell.value)){
+            cell.numFmt=(Math.round(cell.value)===cell.value)?'#,##0':'#,##0.##';
+            cell.alignment={horizontal:'right',vertical:'middle',wrapText:false};
+          }
         }
       }
       row.height=opts.rowHeight||18;
@@ -4819,7 +4906,18 @@ function exportAOAStyled(aoa,merges,opts){
 }
 function _exportAOAFallback(aoa,merges,opts){
   var ws=XLSX.utils.aoa_to_sheet(aoa); if(merges&&merges.length)ws['!merges']=merges;
-  if(opts.cols)ws['!cols']=opts.cols.map(function(w){return {wch:w};});
+  var _fw=(opts.cols&&opts.cols.length)?opts.cols:_autoColWidths(aoa,merges,opts);
+  ws['!cols']=_fw.map(function(w){return {wch:w};});
+  /* SheetJS 무료판도 숫자 서식(z)은 쓸 수 있다 */
+  if(opts.numFmt!==false){
+    try{
+      Object.keys(ws).forEach(function(k){
+        if(k[0]==='!')return;
+        var c=ws[k];
+        if(c&&c.t==='n'&&isFinite(c.v))c.z=(Math.round(c.v)===c.v)?'#,##0':'#,##0.##';
+      });
+    }catch(e){window._qmSoft&&window._qmSoft('_exportAOAFallback',e);}
+  }
   var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,opts.name||'Sheet1');
   XLSX.writeFile(wb,opts.file||'export.xlsx');
 }
@@ -7882,7 +7980,7 @@ function renderPreview(){
 
   // Build table
   var thHtml='<th>프로그램명</th><th>요일</th><th>시작</th><th>종료</th><th>시급</th>';
-  wkNums.forEach(function(w){thHtml+='<th style="min-width:92px">'+esc(wkLabelSet[w])+'</th>';});
+  wkNums.forEach(function(w){thHtml+='<th style="min-width:92px">'+esc(_wkColLabel(w,wkLabelSet[w]))+'</th>';});
   var colCount=5+wkNums.length;
 
   var bodyHtml='';
@@ -7959,7 +8057,7 @@ function downloadPreviewXlsx(){
   rows.forEach(function(r){if(r.wk>=1&&r.wk<=6)wkLabelSet[r.wk]=r.wkRange;});
   var wkNums=Object.keys(wkLabelSet).map(Number).sort();
   var hdrs=['채널','프로그램명','요일','시작','종료','시급','초수','구분','지상파구분','단가','청약금액','소재'];
-  wkNums.forEach(function(w){hdrs.push(wkLabelSet[w]||('W'+w));});
+  wkNums.forEach(function(w){hdrs.push(_wkColLabel(w,wkLabelSet[w]));});
   hdrs.push('PP','지상파/케이블');
 
   var data=[hdrs];
@@ -8857,6 +8955,7 @@ function _renderAnalysisTable(){
     var wk=+r[34]||0;
     if(wk>=1&&wk<=6){weekExists[wk-1]=true;if(!weekRangeLabels[wk-1]&&r[35])weekRangeLabels[wk-1]=r[35];}
   });
+  _fillWeekRanges(weekRangeLabels,filtered);   /* 비어 있는 주차도 범위를 계산해 채운다 */
   var showWeeks=[];
   for(var wi=0;wi<6;wi++){if(wi<4||weekExists[wi])showWeeks.push(wi+1);}
 
@@ -8961,7 +9060,7 @@ function _renderAnalysisTable(){
   if(anOpts.showAmount)_anAllCols.push({key:'amount',label:'금액'});
   if(anOpts.showCmOrder)_anAllCols.push({key:'cmorder',label:'CM순서'});
   showWeeks.forEach(function(wk){
-    _anAllCols.push({key:'wk'+wk,label:weekRangeLabels[wk-1]||wk+'주차',wk:wk,isWeek:true});
+    _anAllCols.push({key:'wk'+wk,label:_wkColLabel(wk,weekRangeLabels[wk-1]),wk:wk,isWeek:true});
   });
   var colKeys=_anAllCols.map(function(c){return c.key;});
 

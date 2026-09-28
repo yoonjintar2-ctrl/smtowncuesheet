@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Q-Mate v3.7.0 - 방송사 큐시트 관리 사이트</title>
-<script>window.QM_VERSION='v3.7.0 / 2026-09-23';</script>
+<script>window.QM_VERSION='v3.7.2 / 2026-09-28';</script>
 <script>
 /* ═══ 시작 오류 수집기 (2026-08-25) ═══
    예전에는 스크립트가 어디서든 한 번 죽으면 mainApp이 display:none인 채로 남아
@@ -1736,12 +1736,40 @@ function getLongName(soaeName){
 function lookupPC(fn,sn){
   var f=(fn||'').normalize('NFC').toLowerCase();
   var s=(sn||'').normalize('NFC').toLowerCase();
+  /* ── 1차(기존): 파일명이 fileIncludes 를 품고 있어야 한다. sheetIncludes 는 추가 조건. ──
+     여기서 걸리면 예전과 100% 같은 결과다. 아래 폴백은 **1차가 아무것도 못 찾았을 때만** 돈다. */
   for(var i=0;i<mappingRules.length;i++){
     var r=mappingRules[i];
     if(!r.fileIncludes)continue;
     if(f.indexOf(r.fileIncludes.normalize('NFC').toLowerCase())<0)continue;
     if(r.sheetIncludes&&s.indexOf(r.sheetIncludes.normalize('NFC').toLowerCase())<0)continue;
     return{pp:r.pp,channel:r.channel};
+  }
+  /* ── 2차(2026-09-28): 채널을 가리키는 sheetIncludes 를 **시트명·파일명 어디서든** 찾는다. ──
+     예) `tvN_2610.xlsx` / 시트 `에이치엘디앤아이한라tvN`
+         → tvN 규칙은 전부 파일명에 CJENM·CJ ENM·CJ_ 를 요구해서 1차에서 탈락한다.
+           방송사가 파일명을 제각각 보내기 시작해서, 이름 어딘가에 채널명이 있으면 잡아 준다.
+     ⚠️ 규칙 순서를 그대로 따르므로 'tvN SHOW'·'tvN DRAMA'·'tvN STORY' 가 'tvN' 보다 먼저 걸린다.
+     ⚠️ pp·channel 이 **둘 다 빈** 규칙(MBC every1 의 '일자별' 제외용)은 건너뛴다 —
+        그건 "매핑하라"가 아니라 "빼라"는 규칙이라 폴백에서 집으면 안 된다. */
+  var _fb=function(hay,key){ return key.length>=3 && hay.indexOf(key)>=0; };
+  for(var i2=0;i2<mappingRules.length;i2++){
+    var r2=mappingRules[i2];
+    if(!r2.sheetIncludes)continue;
+    if(!r2.pp&&!r2.channel)continue;
+    var k2=r2.sheetIncludes.normalize('NFC').toLowerCase();
+    if(_fb(s,k2)||_fb(f,k2))return{pp:r2.pp,channel:r2.channel};
+  }
+  /* ── 3차: 반대로 fileIncludes(대부분 방송사·채널 이름)를 **시트명**에서 찾는다. ──
+     예) 파일명은 `2610.xlsx` 인데 시트명이 `SBS` 인 경우. */
+  for(var i3=0;i3<mappingRules.length;i3++){
+    var r3=mappingRules[i3];
+    if(!r3.fileIncludes)continue;
+    if(!r3.pp&&!r3.channel)continue;
+    var k3=r3.fileIncludes.normalize('NFC').toLowerCase().trim();
+    if(!_fb(s,k3))continue;
+    if(r3.sheetIncludes&&s.indexOf(r3.sheetIncludes.normalize('NFC').toLowerCase())<0)continue;
+    return{pp:r3.pp,channel:r3.channel};
   }
   return{pp:'',channel:''};
 }
@@ -1924,7 +1952,10 @@ var COL_WCH=[
 ];
 var OUT_COLS=['채널','품목','프로그램','요일','시작시간','종료시간','시급','초수','CM위치','단가','횟수','월','화','수','목','금','토','일','날짜','시작일자','종료일자','집행일','1주','2주','3주','4주','5주','6주','품목 카테고리','지상파/케이블 구분','CM위치(보정값)','주중/주말','단가(서비스x)','PP','주차 구분(숫자)','주차 구분(날짜)','값 표시','정기물 여부','행 그룹 내 순서(석진 사용)','해당 그룹의 총 횟수(석진 사용)','해당 프로그램 15초 평단가(석진 사용)','본방여부','15초 단가 환산','품목 풀네임','1W','2W','3W','4W','5W','6W','금액','CM 순서','예산','소재','온보딩일','원본 파일명','CM위치(미보정)','원본 시트명'];
 function _todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-var _HIDDEN_COLS=[28,30,32,37,38,39,40,43,44,45,46,47,48,49,50,51,52,57];
+/* 열 설정·피벗 필드에서 아예 빼 버리는 열(내부 계산용).
+   ⚠️ 57 '원본 시트명'은 2026-09-23부터 여기서 뺐다 — 고를 수는 있어야 하고,
+      다만 _defaultColConfig()에 없으므로 **기본값은 숨김**이다. */
+var _HIDDEN_COLS=[28,30,32,37,38,39,40,43,44,45,46,47,48,49,50,51,52];
 
 /* ═══ 프로그램명 태그(<본방>·<생방>·<특집>) 공통 처리 ═══
    방송사 큐시트마다 <본방> ［생방］ (특집) 처럼 표기가 제각각이라 한 번에 정규화하고,
@@ -3150,7 +3181,25 @@ function readFile(entry){
       var data=new Uint8Array(e.target.result);
       var wb=XLSX.read(data,{type:'array',cellFormula:false,cellHTML:false,cellNF:true,cellDates:false});
       entry.sheets=[];
+      /* 🚫 숨김 시트는 아예 열지 않는다(2026-09-23 사용자 지시).
+         방송사 파일에는 이전 달 잔재·내부 계산용 시트가 숨겨져 들어 있는 경우가 많아
+         이를 읽으면 없는 물량이 잡힌다. SheetJS는 wb.Workbook.Sheets[i].Hidden 으로
+         상태를 준다 — 0=보임 / 1=숨김 / 2=매우 숨김(VBA로만 해제). 1 이상이면 건너뛴다.
+         ⚠️ 구형 파일이나 일부 .xls 는 Workbook 정보가 없을 수 있다 → 그때는 전부 보이는 것으로 본다. */
+      var _hiddenNames={};
+      try{
+        var _wbs=(wb.Workbook&&wb.Workbook.Sheets)||null;
+        if(_wbs&&_wbs.length){
+          for(var _hi=0;_hi<_wbs.length;_hi++){
+            var _si=_wbs[_hi]||{};
+            var _nm=(_si.name!=null?_si.name:wb.SheetNames[_hi]);
+            if(_nm!=null&&+(_si.Hidden||0)>0)_hiddenNames[String(_nm)]=+_si.Hidden;
+          }
+        }
+      }catch(e){window._qmSoft&&window._qmSoft('readFile#hidden',e);}
+      entry.hiddenSheets=Object.keys(_hiddenNames);
       wb.SheetNames.forEach(function(sname){
+        if(_hiddenNames.hasOwnProperty(String(sname)))return;   /* 숨김 시트 — 열람하지 않음 */
         var ws=wb.Sheets[sname];
         var raw=readSheetToArray(ws);
         var _qm=_qmDetectSheet(raw);
@@ -3162,6 +3211,25 @@ function readFile(entry){
         }
       });
       entry.status='loaded';
+      /* 읽기는 됐는데 채널 매핑에 하나도 안 걸리면 0행이 된다.
+         파일 목록의 작은 '⚠ 매핑없음' 칩만으로는 "인식을 못 한다"로만 보여서,
+         무엇을 해야 하는지 직접 알려 준다(2026-09-28). */
+      try{
+        if(entry.sheets.length&&!entry.sheets.some(function(_s){
+             if(_s.qmate)return true;
+             var _pc=lookupPC(entry.name,_s.name);
+             return !!(_pc.pp||_pc.channel);
+           })){
+          showSaveToast('"'+entry.name+'" 에서 채널을 알아내지 못했습니다.\n'
+            +'파일명이나 시트명에 채널 이름(예: tvN, SBS, 채널S)이 들어가도록 바꾸거나,\n'
+            +'[채널 매핑 규칙]에 이 파일명 키워드를 추가해 주세요.','warn');
+        }
+      }catch(e){window._qmSoft&&window._qmSoft('readFile#nomap',e);}
+      /* 시트가 전부 숨김이면 읽을 게 없다 — 조용히 0행으로 두면 원인을 못 찾는다 */
+      if(!entry.sheets.length&&entry.hiddenSheets&&entry.hiddenSheets.length){
+        try{ showSaveToast('"'+entry.name+'" 은(는) 시트가 모두 숨김 처리되어 있어 읽지 않았습니다.\n엑셀에서 시트 숨김을 해제한 뒤 다시 올려 주세요.','warn'); }
+        catch(e){window._qmSoft&&window._qmSoft('readFile#allHidden',e);}
+      }
     }catch(err){
       if(err.message&&err.message.indexOf('password')>=0){entry.status='encrypted';}
       else{entry.status='error';entry.error=err.message;}
@@ -3184,9 +3252,11 @@ function removeFile(idx){
   }
   // If onboarding was saved, update it to reflect removal
   if(localStorage.getItem(ONBOARDING_KEY)){saveOnboardingData();}
+  try{ _qmQuotaRecheck(true); }catch(e){window._qmSoft&&window._qmSoft('removeFile',e);}
 }
 
-function clearAllFiles(){files=[];window._consolidatedRows=null;renderList();updateBtn();}
+function clearAllFiles(){files=[];window._consolidatedRows=null;renderList();updateBtn();
+  try{ _qmQuotaRecheck(true); }catch(e){window._qmSoft&&window._qmSoft('clearAllFiles',e);} }
 
 /* ── 추가 온보딩: 현재 편집 데이터를 JSON으로 통합 후 첫 화면으로 ── */
 function closeSetupModal(){ var sm=document.getElementById('setupModal'); if(sm)sm.style.display='none'; if(window._pvStaging){ window._pvStaging=false; files=files.filter(function(f){return f&&f.isConsolidated;}); try{ if(window._consolidatedRows&&window._consolidatedRows.length)_liveRows=[OUT_COLS.slice()].concat(window._consolidatedRows); }catch(e){window._qmSoft&&window._qmSoft('closeSetupModal',e);} if(typeof renderList==='function')renderList(); if(typeof updateBtn==='function')updateBtn(); renderLivePreview(); } }
@@ -3243,8 +3313,10 @@ function renderList(){
     var meta='';
     if(f.status==='loaded'){
       var pps=[];f.sheets.forEach(function(sh){var pc=lookupPC(f.name,sh.name);if(pc.pp&&pps.indexOf(pc.pp)<0)pps.push(pc.pp);});
+      var _hidN=(f.hiddenSheets&&f.hiddenSheets.length)||0;
+      var _hidChip=_hidN?('<span style="color:#b45309" title="숨김 시트는 읽지 않습니다: '+esc(f.hiddenSheets.join(', '))+'"> · 숨김 '+_hidN+'개 제외</span>'):'';
       meta=gm?('<span class="ok">✓</span> <span style="color:var(--accent2)">'+esc(pps.join(' ')||'매핑없음')+'</span>'+_itemChip):
-              ('<span class="ok">✓</span> <span>'+f.sheets.length+'시트</span>'+
+              ('<span class="ok">✓</span> <span>'+f.sheets.length+'시트</span>'+_hidChip+
                 (f.sheets.some(function(_s){return _s.qmate;})?' <span style="color:var(--accent2)">Q-Mate 파일 · 그대로 사용</span>'
                  :(matched?' <span style="color:var(--accent2)">'+pps.join(', ')+'</span>':'<span class="warn">⚠ 매핑없음</span>'))+_itemChip);
     }else if(f.status==='encrypted'){meta='<span style="color:#ff6060">🔒 암호화</span>';}
@@ -8626,7 +8698,11 @@ function _autoSaveNow(makeBackup){
     try{ payload.liveRows=null; localStorage.setItem(AUTOSAVE_KEY,JSON.stringify(payload)); }catch(e2){window._qmSoft&&window._qmSoft('_autoSaveNow',e2);}
     degraded=true;
   }
+  var _wasDeg=!!window._qmAutoSaveDegraded;
   window._qmAutoSaveDegraded=(degraded&&!_autoSaveFileHandle);
+  /* 막 용량 초과가 된 순간 — 작은 알약만으로는 놓친다. 크게 띄운다 */
+  if(window._qmAutoSaveDegraded&&!_wasDeg){ try{ _qmQuotaBanner(true); }catch(e){window._qmSoft&&window._qmSoft('_autoSaveNow#3',e);} }
+  if(!window._qmAutoSaveDegraded&&_wasDeg){ try{ _qmQuotaBanner(false); }catch(e){window._qmSoft&&window._qmSoft('_autoSaveNow#4',e);} }
   if(makeBackup!==false)_pushAutoBackup(payload);
   if(_autoSaveFileHandle){
     try{ _autoSaveFileHandle.createWritable().then(function(w){ return w.write(json).then(function(){ return w.close(); }); }).catch(function(){}); }catch(e){window._qmSoft&&window._qmSoft('_autoSaveNow#2',e);}
@@ -8731,6 +8807,7 @@ function restoreAutoBackup(ts){
 function clearAutoBackups(){
   if(!confirm('보관 중인 자동 저장 백업을 모두 삭제할까요?'))return;
   try{ localStorage.removeItem(AUTOSAVE_BAK_KEY); }catch(e){window._qmSoft&&window._qmSoft('clearAutoBackups',e);}
+  try{ _qmQuotaRecheck(false); }catch(e){window._qmSoft&&window._qmSoft('clearAutoBackups#2',e);}
   openAutoBackups();
 }
 
@@ -8760,6 +8837,89 @@ function _doAutoRestore(){
     var b=document.getElementById('autoRestoreBar'); if(b)b.remove();
   }catch(e){ if(typeof showSaveToast==='function')showSaveToast('복원 실패: '+e.message,true); }
 }
+/* ── 저장 용량 초과 경고막 (2026-09-23) ──
+   예전에는 왼쪽 아래 작은 주황 알약 하나뿐이라 놓치기 쉬웠다.
+   이 상태로 새로고침하면 수동 편집이 전부 롤백되므로 크게 띄우고,
+   가장 확실한 대피로인 **엑셀 다운로드**를 먼저 권한다. */
+function _qmQuotaBanner(show){
+  var el=document.getElementById('qmQuotaWarn');
+  if(!show){ if(el)el.remove(); return; }
+  if(el)return;                                  /* 이미 떠 있으면 다시 만들지 않는다 */
+  el=document.createElement('div');
+  el.id='qmQuotaWarn';
+  el.setAttribute('data-html2canvas-ignore','true');   /* 편성표 이미지에 찍히지 않게 */
+  el.style.cssText='position:fixed;inset:0;z-index:10050;background:rgba(17,24,39,.55);'
+    +'display:flex;align-items:center;justify-content:center;padding:20px';
+  el.innerHTML=
+     '<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:26px 28px;'
+    +'box-shadow:0 18px 50px rgba(0,0,0,.3);border-top:6px solid #d97706">'
+    +'<div style="font-size:1.32rem;font-weight:800;color:#92400e;line-height:1.3">'
+    +'⚠️ 브라우저 저장 공간이 가득 찼습니다</div>'
+    +'<div style="margin-top:12px;font-size:.87rem;color:#374151;line-height:1.65">'
+    +'지금 편집한 <b>큐시트 행이 자동 저장되지 않았습니다.</b><br>'
+    +'이 상태로 새로고침하거나 창을 닫으면 <b style="color:#b91c1c">수정한 내용이 모두 사라집니다.</b><br>'
+    +'<span style="display:block;margin-top:10px;padding:10px 12px;background:#fffbeb;border-radius:8px;'
+    +'border:1px solid #fde68a;font-size:.83rem">'
+    +'👉 <b>지금 바로 엑셀로 내려받아 두세요.</b> 가장 확실한 보관 방법입니다.<br>'
+    +'<span style="color:#6b7280">브라우저가 한 사이트에 내주는 공간은 약 5MB라, 행이 많아지면 넘칠 수 있습니다.</span>'
+    +'</span></div>'
+    +'<div style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button id="qmQuotaXlsx" style="flex:1 1 180px;padding:11px 14px;border:none;border-radius:8px;'
+    +'background:#0068b5;color:#fff;font-weight:800;font-size:.88rem;cursor:pointer">⬇ 엑셀로 다운로드 (권장)</button>'
+    +'<button id="qmQuotaJson" style="flex:0 1 150px;padding:11px 14px;border:1px solid #cbd5e1;border-radius:8px;'
+    +'background:#f8fafc;color:#334155;font-weight:700;font-size:.84rem;cursor:pointer">JSON 파일 저장</button>'
+    +'</div>'
+    +'<div style="margin-top:12px;text-align:right">'
+    +'<button id="qmQuotaClose" style="padding:5px 12px;border:none;background:transparent;color:#6b7280;'
+    +'font-size:.76rem;cursor:pointer;text-decoration:underline">나중에 하기 (경고는 왼쪽 아래에 남습니다)</button>'
+    +'</div></div>';
+  document.body.appendChild(el);
+  var close=function(){ _qmQuotaBanner(false); };
+  var byId=function(id){ return document.getElementById(id); };
+  var bx=byId('qmQuotaXlsx'); if(bx)bx.onclick=function(){
+    close();
+    try{ if(typeof downloadPreviewXlsx==='function')downloadPreviewXlsx();
+         else if(typeof confirmAndMerge==='function')confirmAndMerge(); }
+    catch(e){ showSaveToast('엑셀 저장 실패: '+e.message,'err'); }
+  };
+  var bj=byId('qmQuotaJson'); if(bj)bj.onclick=function(){
+    close();
+    try{ manualSave(); }catch(e){ showSaveToast('JSON 저장 실패: '+e.message,'err'); }
+  };
+  var bc=byId('qmQuotaClose'); if(bc)bc.onclick=close;
+}
+
+/* ── 용량이 다시 생겼는지 확인 (2026-09-23) ──
+   예전에는 용량 초과 표시가 **성공적인 자동 저장으로만** 풀렸다. 자동 저장은
+   3분에 한 번, 그것도 변경이 있을 때만 돌기 때문에 백업을 지우거나 파일을 빼서
+   공간을 비워도 한참 동안 경고가 그대로 남아 있었다. 그래서 공간이 풀릴 만한
+   동작 뒤와 1분 주기로 직접 저장을 다시 시도해 본다.
+   quiet=true 면 실패해도 조용히 넘어간다(주기 점검용). */
+function _qmQuotaRecheck(quiet){
+  if(!window._qmAutoSaveDegraded)return false;
+  var okNow=false;
+  try{
+    var payload=_buildAutoSavePayload();
+    if(!payload)return false;
+    localStorage.setItem(AUTOSAVE_KEY,JSON.stringify(payload));
+    okNow=true;
+  }catch(e){ okNow=false; }
+  if(okNow){
+    window._qmAutoSaveDegraded=false;
+    _lastAutoSaveTs=Date.now();
+    _qmQuotaBanner(false);
+    try{ _updateAutoSaveLabel(); }catch(e){window._qmSoft&&window._qmSoft('_qmQuotaRecheck',e);}
+    try{ showSaveToast('저장 공간이 확보되어 자동 저장이 다시 작동합니다.\n방금 편집한 내용까지 저장해 두었습니다.'); }
+    catch(e){window._qmSoft&&window._qmSoft('_qmQuotaRecheck#2',e);}
+    return true;
+  }
+  if(!quiet){
+    try{ showSaveToast('아직 저장 공간이 부족합니다.\n[자동 저장 백업]을 지우거나 온보딩 파일을 빼면 공간이 생깁니다.','warn'); }
+    catch(e){window._qmSoft&&window._qmSoft('_qmQuotaRecheck#3',e);}
+  }
+  return false;
+}
+
 function _updateAutoSaveLabel(){
   var deg=!!window._qmAutoSaveDegraded;
   var inline=document.getElementById('autoSaveStatus');
@@ -8780,17 +8940,23 @@ function _updateAutoSaveLabel(){
   }
   if(deg){
     pill.style.background='rgba(217,119,6,.95)'; pill.style.color='#fff'; pill.style.fontWeight='700';
-    pill.title='브라우저 저장 공간(약 5MB)을 넘겨서 큐시트 행이 자동 저장되지 않았습니다. 상단 [JSON 파일 저장]으로 직접 저장하세요.';
-    pill.textContent='⚠ 저장 용량 초과 — 행 데이터 미저장, JSON으로 저장하세요';
+    pill.title='브라우저 저장 공간(약 5MB)을 넘겨서 큐시트 행이 자동 저장되지 않았습니다. 눌러서 안내를 다시 봅니다.';
+    pill.textContent='⚠ 저장 용량 초과 — 엑셀로 내려받아 두세요';
+    pill.onclick=function(){ _qmQuotaBanner(true); };
     return;
   }
+  pill.onclick=function(){ try{ openAutoBackups(); }catch(e){window._qmSoft&&window._qmSoft('_updateAutoSaveLabel#3',e);} };
   pill.style.background='rgba(31,41,55,.72)'; pill.style.color='#e5e7eb'; pill.style.fontWeight='';
   pill.title='자동 저장 백업 열기';
   var mins=Math.floor((Date.now()-_lastAutoSaveTs)/60000);
   pill.textContent='자동 저장됨 · '+(mins<1?'방금':(mins+'분 전'));
 }
 /* 라벨 갱신용 타이머(1분) */
-setInterval(function(){ try{ _updateAutoSaveLabel(); }catch(e){window._qmSoft&&window._qmSoft('_updateAutoSaveLabel#2',e);} },60000);
+setInterval(function(){
+  try{ _updateAutoSaveLabel(); }catch(e){window._qmSoft&&window._qmSoft('_updateAutoSaveLabel#2',e);}
+  /* 다른 탭에서 지웠든 백업을 비웠든, 공간이 생기면 알아서 알려 준다 */
+  try{ _qmQuotaRecheck(true); }catch(e){window._qmSoft&&window._qmSoft('_qmQuotaRecheck#loop',e);}
+},60000);
 
 function manualSave(){
   window._pvDirty=false;
@@ -11823,6 +11989,17 @@ function fbDeleteCampaign(id,nm){
       location.reload(); return;
     }
     _fbRenderCampList();
+    /* 용량 초과 상태였다면 바로 다시 확인해 준다.
+       ⚠️ 캠페인은 **구글 계정(클라우드)** 에 저장되므로 지워도 브라우저 공간은 줄지 않는다.
+          회복이 안 되면 실제로 공간을 비우는 방법을 알려 준다. */
+    if(window._qmAutoSaveDegraded){
+      var _rec=false;
+      try{ _rec=_qmQuotaRecheck(true); }catch(e){window._qmSoft&&window._qmSoft('fbDeleteCampaign',e);}
+      if(!_rec){
+        try{ showSaveToast('캠페인은 구글 계정에 저장되어 있어, 지워도 이 브라우저의 저장 공간은 줄지 않습니다.\n왼쪽 아래 [자동 저장 백업]을 비우거나 온보딩 파일을 빼면 공간이 생깁니다.','warn'); }
+        catch(e){window._qmSoft&&window._qmSoft('fbDeleteCampaign#2',e);}
+      }
+    }
   }).catch(function(e){showSaveToast('삭제 실패: '+e.message,'err');});
 }
 /* 자동 저장 없음 — [저장] 버튼을 눌렀을 때만 클라우드에 기록됩니다. */

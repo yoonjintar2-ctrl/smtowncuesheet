@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Q-Mate v3.7.0 - 방송사 큐시트 관리 사이트</title>
-<script>window.QM_VERSION='v3.7.5 / 2026-10-15';</script>
+<script>window.QM_VERSION='v3.7.6 / 2026-10-15';</script>
 <script>
 /* ═══ 시작 오류 수집기 (2026-08-25) ═══
    예전에는 스크립트가 어디서든 한 번 죽으면 mainApp이 display:none인 채로 남아
@@ -575,9 +575,12 @@ tr.pv-highlight-on td{background:rgba(251,191,36,.18)!important}
 .pv-cell-sel:focus{outline:1px solid #0068b5;background:#fff}
 /* v3.4.8 — 드롭다운 셀은 평소엔 평문으로 그리고 클릭할 때만 <select>로 바뀐다.
    (행마다 option 81개를 찍던 구조가 대량 행에서 화면을 몇 초씩 멈추게 했음) */
-.pv-selcell{cursor:pointer;text-align:center;white-space:nowrap}
-.pv-selcell:hover{background:#eef4ff}
-.pv-selcell .pv-selcaret{color:#b8b8c0;font-size:.55rem;margin-left:2px}
+.fb-camp-open{cursor:pointer;color:#1f2937}
+.fb-camp-open:hover{color:#0068b5;text-decoration:underline}
+.pv-selcell{cursor:cell;text-align:center;white-space:nowrap}
+.pv-selcell{position:relative;padding-right:14px!important}
+.pv-selcell .pv-selcaret{position:absolute;right:1px;top:50%;transform:translateY(-50%);color:#9a9aa6;font-size:.55rem;line-height:1;padding:3px 3px;border-radius:3px;cursor:pointer}
+.pv-selcell .pv-selcaret:hover{background:#dbe7f7;color:#0068b5}
 .pv-tbtn{font-size:.68rem;padding:3px 10px;background:#fff;border:1px solid #bbb;border-radius:5px;color:#444;font-weight:600;cursor:pointer;font-family:"Noto Sans KR","Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;transition:all .12s}
 .pv-tbtn:hover:not(:disabled){background:#f2f2f4;border-color:#888;color:#111}
 .pv-tbtn:disabled{opacity:.45;cursor:default}
@@ -1009,7 +1012,6 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
         <div style="padding:12px 15px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-sm btn-add" onclick="importOnboardingJSON()" title="JSON 파일에서 작업 데이터 불러오기">JSON 파일 추가</button>
           <button class="btn-sm btn-add" onclick="manualSave()" title="현재 작업 데이터+설정을 JSON 파일로 저장">JSON 파일 저장</button>
-          <button class="btn-sm btn-add" onclick="openAutoBackups()" title="3분마다 자동 저장된 최근 5개 버전에서 되돌리기">⏱ 자동저장 백업</button>
         </div>
       </div>
     </div>
@@ -1086,7 +1088,7 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
     <div class="gp-body">
       <div style="display:flex;flex-direction:column;gap:10px;font-size:.8rem">
         <label style="display:flex;align-items:center;gap:8px">열 선택 <select id="frCol" style="flex:1;padding:5px;border:1px solid #bbb;border-radius:5px"></select></label>
-        <label style="display:flex;align-items:center;gap:8px">찾을 텍스트 <input id="frFind" oninput="frUpdateCount()" style="flex:1;padding:5px;border:1px solid #bbb;border-radius:5px"></label>
+        <label style="display:flex;align-items:center;gap:8px">찾을 텍스트 <input id="frFind" oninput="frUpdateCount()" placeholder="공란으로 두면 모든 항목을 바꿉니다" style="flex:1;padding:5px;border:1px solid #bbb;border-radius:5px"></label>
         <label style="display:flex;align-items:center;gap:8px">바꿀 텍스트 <input id="frReplace" style="flex:1;padding:5px;border:1px solid #bbb;border-radius:5px"></label>
         <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="frWhole" onchange="frUpdateCount()">셀 전체가 정확히 일치할 때만</label>
         <div style="display:flex;align-items:center;gap:8px">적용 범위
@@ -1099,6 +1101,7 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
         <button onclick="frApply()" style="padding:7px;background:#0068b5;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer">바꾸기 실행</button>
         <div id="frScopeNote" style="color:var(--muted);font-size:.68rem;line-height:1.5">※ 현재 필터로 보이는 행에만 적용됩니다. 날짜 열은 자동 재계산 없이 텍스트만 바뀝니다.</div>
         <style>
+           #frFind::placeholder{color:#b0b0b0}
           .fr-scope{display:inline-flex;flex:1;border:1px solid #bbb;border-radius:6px;overflow:hidden}
           .fr-scope label{flex:1;display:flex;cursor:pointer}
           .fr-scope input{position:absolute;opacity:0;pointer-events:none}
@@ -1195,6 +1198,7 @@ var DEFAULT_MAPPING_RULES=[
   {fileIncludes:'SBS Biz',  sheetIncludes:'', pp:'SBS', channel:'SBS Biz'},
   {fileIncludes:'SBS Plus',sheetIncludes:'',  pp:'SBS', channel:'SBS Plus'},
   {fileIncludes:'KBS JOY', sheetIncludes:'',  pp:'KBS', channel:'KBS Joy'},
+  {fileIncludes:'SBS Golf', sheetIncludes:'', pp:'SBS', channel:'SBS Golf'},   /* 2026-10-15 사용자 매핑에서 편입 */
   // ── 지상파 3사 (공백 or 언더스코어 둘러싸임 패턴)
   {fileIncludes:' KBS ', sheetIncludes:'', pp:'KBS',  channel:'KBS'},
   {fileIncludes:'_KBS_', sheetIncludes:'', pp:'KBS',  channel:'KBS'},
@@ -1240,6 +1244,7 @@ var DEFAULT_MAPPING_RULES=[
   {fileIncludes:'YTN',     sheetIncludes:'',      pp:'YTN',channel:'YTN'},
   {fileIncludes:'MBN',sheetIncludes:'',           pp:'MBN',   channel:'MBN'},
   {fileIncludes:'MBC 드라마넷',sheetIncludes:'',pp:'MBC',channel:'MBC드라마넷'},
+  {fileIncludes:'MBC드라마넷',sheetIncludes:'',pp:'MBC',channel:'MBC드라마넷'},   /* 2026-10-15 사용자 매핑에서 편입(공백 없는 파일명) */
   {fileIncludes:'KBSN스포츠',sheetIncludes:'',  pp:'KBS',  channel:'KBSN스포츠'},
   {fileIncludes:'KBS스포츠', sheetIncludes:'',  pp:'KBS',  channel:'KBSN스포츠'},
   // MBC SPORTS+ 가 먼저 와야 'MBC SPORTS'에 먼저 매칭되지 않음
@@ -1285,6 +1290,10 @@ var DEFAULT_BROADCAST_RULES=[
   {channel:'SPOTV',type:'케이블/종편'},{channel:'SPOTV2',type:'케이블/종편'},{channel:'SPOTV PRIME,PRIME2,PRIME+',type:'케이블/종편'},
   {channel:'SPOTV PRIME',type:'케이블/종편'},{channel:'SPOTV 전채널 공통',type:'케이블/종편'},
   {channel:'SPOTV Golf+',type:'케이블/종편'},{channel:'SPOTV/SPOTV2',type:'케이블/종편'},
+  /* 2026-10-15 사용자 지상파/케이블 설정에서 편입 */
+  {channel:'tvN SHOW',type:'케이블/종편'},{channel:'tvN DRAMA',type:'케이블/종편'},{channel:'tvN STORY',type:'케이블/종편'},
+  {channel:'KBS Sports',type:'케이블/종편'},{channel:'SBS funE',type:'케이블/종편'},{channel:'DramaCube',type:'케이블/종편'},
+  {channel:'JTBC GOLF',type:'케이블/종편'},{channel:'EDGETV',type:'케이블/종편'},
   {channel:'채널S',type:'케이블/종편'},{channel:'TV조선',type:'케이블/종편'},{channel:'TV조선2',type:'케이블/종편'},
   {channel:'채널A',type:'케이블/종편'},{channel:'MBN',type:'케이블/종편'},
 ];
@@ -6520,7 +6529,7 @@ function _pvSelectInnerHTML(ri,col,disp){
 function _pvSelectCellHTML(ri,col,v){
   var disp=_pvSelectDisp(col,v);
   return '<td class="pv-editable-cell pv-selcell" data-row="'+ri+'" data-col="'+col+'" data-v="'+esc(disp)+'">'
-    +esc(disp)+'<span class="pv-selcaret">▾</span></td>';
+    +esc(disp)+'<span class="pv-selcaret" title="목록에서 고르기">▾</span></td>';
 }
 /* 평문 셀 → 진짜 <select>로 교체. openNow면 바로 목록을 펼친다. */
 function _pvHydrateSelCell(td,openNow){
@@ -8721,7 +8730,13 @@ function _buildAutoSavePayload(){
   return {v:2,savedAt:Date.now(),liveRows:(_liveRows&&_liveRows.length>1)?_liveRows:null,files:_serializeOnboardingFiles(),campaign:(window._campaignInfo||null),settings:_currentSettings(),consolidated:(window._consolidatedRows||null)};
 }
 function _autoSaveNow(makeBackup){
+  /* v3.7.6 — 브라우저(localStorage) 히스토리 저장 중단. [JSON 파일 저장]으로 연결한 파일에만 쓴다. */
+  if(!_autoSaveFileHandle) return;
   if(!files.length && !(_liveRows&&_liveRows.length>1)) return;
+  try{ var _j=JSON.stringify(_buildAutoSavePayload());
+       _autoSaveFileHandle.createWritable().then(function(w){ return w.write(_j).then(function(){ return w.close(); }); }).catch(function(){});
+       _lastAutoSaveTs=Date.now(); }catch(e){window._qmSoft&&window._qmSoft('_autoSaveNow#file',e);}
+  return;
   var payload=_buildAutoSavePayload(), json;
   try{ json=JSON.stringify(payload); }catch(e){ return; }
   var ok=false, degraded=false;
@@ -8751,6 +8766,7 @@ function _autoSaveNow(makeBackup){
    지난 뒤에 한 번만 저장한다. 저장할 때마다 백업 버전을 최대 5개까지 돌려가며 보관. */
 function _scheduleAutoSave(){
   try{ window._pvDirty=true; }catch(e){window._qmSoft&&window._qmSoft('_scheduleAutoSave',e);}
+  if(!_autoSaveFileHandle)return;   /* v3.7.6 — 브라우저 히스토리 저장 안 함 */
   if(_autoSaveTimer)return;
   var since=Date.now()-(_lastAutoSaveTs||0);
   var wait=Math.max(5000, AUTOSAVE_INTERVAL_MS-since);
@@ -8932,6 +8948,7 @@ function _qmQuotaBanner(show){
    동작 뒤와 1분 주기로 직접 저장을 다시 시도해 본다.
    quiet=true 면 실패해도 조용히 넘어간다(주기 점검용). */
 function _qmQuotaRecheck(quiet){
+  return false;   /* v3.7.6 — 브라우저 자동 저장을 하지 않으므로 용량 재점검도 불필요 */
   if(!window._qmAutoSaveDegraded)return false;
   var okNow=false;
   try{
@@ -10238,13 +10255,29 @@ document.addEventListener('keydown',function(e){
   // Copy
   if((e.ctrlKey||e.metaKey)&&e.key==='c'&&!e.shiftKey){
     e.preventDefault();
-    var texts=_pvSelectedCells.map(function(c){
+    var _cellTxt=function(c){
       var _s=c.querySelector('select.pv-cell-sel');
       if(_s)return _s.value==='__add__'?'':_s.value;      /* 드롭다운 셀은 선택된 값 */
       if(c.classList.contains('pv-selcell'))return c.getAttribute('data-v')||'';   /* 아직 평문인 드롭다운 셀 */
       return c.textContent.trim();
+    };
+    /* 엑셀에 그대로 붙도록 행은 줄바꿈, 열은 탭으로 (v3.7.6) */
+    var _vcC=(window._pvVisCols&&window._pvVisCols.length)?window._pvVisCols:((_colConfig&&_colConfig.length)?_colConfig:_defaultColConfig());
+    var _byRow={},_rowsO=[],_colsO={};
+    _pvSelectedCells.forEach(function(c){
+      var r=+c.getAttribute('data-row'), cc=+c.getAttribute('data-col');
+      if(!_byRow[r]){_byRow[r]={};_rowsO.push(r);} _byRow[r][cc]=_cellTxt(c); _colsO[cc]=1;
     });
-    navigator.clipboard.writeText(texts.join('\n'));
+    _rowsO.sort(function(a,b){return a-b;});
+    var _colList=Object.keys(_colsO).map(Number).sort(function(a,b){ return _vcC.indexOf(a)-_vcC.indexOf(b); });
+    var _tsv=_rowsO.map(function(r){ return _colList.map(function(cc){ var v=_byRow[r][cc]; return v==null?'':v; }).join('\t'); }).join('\n');
+    var _nCopied=_pvSelectedCells.length;
+    var _okMsg=function(){ if(typeof showSaveToast==='function')showSaveToast(_nCopied.toLocaleString()+'개 셀이 복사되었습니다.'); };
+    try{
+      var _pr=navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(_tsv):null;
+      if(_pr&&_pr.then)_pr.then(_okMsg,function(){ _qmCopyFallback(_tsv)?_okMsg():(typeof showSaveToast==='function'&&showSaveToast('복사에 실패했습니다.','err')); });
+      else { _qmCopyFallback(_tsv); _okMsg(); }
+    }catch(_ce){ if(_qmCopyFallback(_tsv))_okMsg(); }
   }
 
   // Paste handled via paste event (see below) to avoid clipboard permission popup
@@ -10337,6 +10370,12 @@ document.addEventListener('keydown',function(e){
   }
 });
 
+function _qmCopyFallback(t){
+  try{ var ta=document.createElement('textarea'); ta.value=t; ta.style.cssText='position:fixed;left:-9999px;top:0';
+       document.body.appendChild(ta); ta.select(); var ok=document.execCommand('copy'); ta.remove();
+       var w=document.getElementById('previewTableWrap'); if(w){w.tabIndex=-1;w.focus({preventScroll:true});}
+       return ok; }catch(e){ return false; }
+}
 // Paste via paste event (avoids clipboard permission popup)
 document.addEventListener('paste',function(e){
   if(!_pvSelectedCells.length||_pvEditingCell)return;
@@ -10804,6 +10843,15 @@ function _frFilteredRows(){
   return Array.isArray(_pvFilteredRows)?_pvFilteredRows:_frAllRows();
 }
 function _frRows(){ return _frScope()==='all'?_frAllRows():_frFilteredRows(); }
+/* 셀 하나를 통째로 바꿀 때 연결된 열도 함께 맞춘다(붙여넣기와 같은 규칙) */
+function _frSetCell(r,col,val){
+  if(col===2){ r[2]=_progWithTags(val,_progTags(r[2])); }
+  else if(col===41){ r[41]=(val==='본방'||val==='1')?1:(val===''?'':0); r[2]=_progSetBonbang(String(r[2]||''),r[41]===1); }
+  else if(col===3){ r[3]=val; for(var d=0;d<7;d++)r[11+d]=(_PV_DOW[d]===val)?1:0; r[31]=(val==='토'||val==='일')?'주말':(val?'주중':''); }
+  else if(col===0){ r[0]=val; r[29]=getBroadcastType(val); }
+  else if(col===18&&typeof _pvApplyDateEdit==='function'){ if(!_pvApplyDateEdit(r,val))r[18]=val; }
+  else r[col]=val;
+}
 function frScopeChange(silent){
   var all=_frAllRows().length, flt=_frFilteredRows().length;
   var a=document.getElementById('frScopeFiltered'); if(a)a.textContent='필터된 행만 ('+flt.toLocaleString()+'행)';
@@ -10821,7 +10869,7 @@ function frUpdateCount(){
   var col=+(document.getElementById('frCol')||{}).value;
   var find=(document.getElementById('frFind')||{}).value||'';
   var whole=(document.getElementById('frWhole')||{}).checked;
-  if(!find){ cnt.textContent=''; return; }
+  if(!find){ var _all=_frRows().length; cnt.textContent='찾을 텍스트가 비어 있어 '+_all.toLocaleString()+'개 셀 전체를 바꿉니다'+(_frScope()==='all'?' (전체 행 기준)':' (필터된 행 기준)'); return; }
   var n=0; _frRows().forEach(function(r){ var v=String(r[col]==null?'':r[col]); if(whole?(v===find):(v.indexOf(find)>=0))n++; });
   cnt.textContent=n+'개 셀에서 발견됨'+(_frScope()==='all'?' (전체 행 기준)':' (필터된 행 기준)');
 }
@@ -10830,7 +10878,21 @@ function frApply(){
   var find=(document.getElementById('frFind')||{}).value||'';
   var repl=(document.getElementById('frReplace')||{}).value||'';
   var whole=(document.getElementById('frWhole')||{}).checked;
-  if(!find){ if(typeof showSaveToast==='function')showSaveToast('찾을 텍스트를 입력하세요.',true); return; }
+  if(!find){
+    /* 공란 = 범위 안 이 열의 모든 셀을 바꿀 텍스트로 (v3.7.6) */
+    var _rowsAll=_frRows();
+    if(!_rowsAll.length){ if(typeof showSaveToast==='function')showSaveToast('바꿀 행이 없습니다.','warn'); return; }
+    var _cn=(OUT_COLS&&OUT_COLS[col])||('열'+col);
+    if(!confirm('찾을 텍스트가 비어 있습니다.\n['+_cn+'] 열의 '+_rowsAll.length.toLocaleString()+'개 셀을 모두 "'+repl+'"(으)로 바꿀까요?\n(Ctrl+Z로 되돌릴 수 있습니다)'))return;
+    if(typeof _pvPushUndo==='function')_pvPushUndo();
+    _rowsAll.forEach(function(r){ _frSetCell(r,col,repl); });
+    if(col===2&&typeof syncProgFull==='function')try{syncProgFull();}catch(e){window._qmSoft&&window._qmSoft('frApply#all',e);}
+    renderLivePreview();
+    if(typeof _scheduleAutoSave==='function')_scheduleAutoSave();
+    if(typeof showSaveToast==='function')showSaveToast(_rowsAll.length.toLocaleString()+'개 셀을 변경했습니다.');
+    frUpdateCount();
+    return;
+  }
   if(typeof _pvPushUndo==='function')_pvPushUndo();   /* 되돌리기(Ctrl+Z) 지원 */
   var n=0;
   _frRows().forEach(function(r){
@@ -10882,9 +10944,10 @@ function _pvBindDelegation(){
     var c=td(e); if(!c)return;
     if(c.classList.contains('pv-row-num'))return;      /* 행번호 칸은 클릭 동작 없음 */
     pvCellClick(e,c);
-    /* 드롭다운 열: 이때 처음으로 진짜 <select>를 만들어 바로 펼친다.
-       범위 선택(Shift/Ctrl) 이나 드래그 선택 중이면 펼치지 않는다. */
-    if(c.classList.contains('pv-selcell')&&!e.shiftKey&&!e.ctrlKey&&!e.metaKey&&_pvSelectedCells.length<=1)
+    /* 드롭다운 열(v3.7.6): 오른쪽 끝 ▾ 를 눌렀을 때만 목록을 펼친다.
+       셀의 나머지 부분을 누르면 일반 셀처럼 선택만 된다(복사·붙여넣기용). */
+    var _onCaret=e.target&&e.target.classList&&e.target.classList.contains('pv-selcaret');
+    if(_onCaret&&c.classList.contains('pv-selcell')&&!e.shiftKey&&!e.ctrlKey&&!e.metaKey)
       _pvHydrateSelCell(c,true);
   });
 
@@ -10926,6 +10989,18 @@ function _pvBindDelegation(){
     if(wrap.scrollTop+wrap.clientHeight>=wrap.scrollHeight-800)_pvAppendMore();
   },{passive:true});
 
+  wrap.addEventListener('focusout',function(e){
+    var el=e.target;
+    if(!(el&&el.classList&&el.classList.contains('pv-cell-sel')))return;
+    setTimeout(function(){
+      var c=el.parentNode; if(!c||c.tagName!=='TD'||!c.contains(el))return;
+      if(document.activeElement===el)return;
+      var r=_pvRowAt(+c.getAttribute('data-row')), col=+c.getAttribute('data-col');
+      var disp=r?_pvSelectDisp(col,r[col]):(c.getAttribute('data-v')||'');
+      c.setAttribute('data-v',disp);
+      c.innerHTML=esc(disp)+'<span class="pv-selcaret" title="목록에서 고르기">▾</span>';
+    },0);
+  });
   wrap.addEventListener('change',function(e){
     var el=e.target;
     if(el&&el.classList&&el.classList.contains('pv-cell-sel')){ pvChangeSelectCell(el); return; }
@@ -11650,7 +11725,11 @@ var _origMergeFiles=mergeFiles;
   }
 });
 try{(function(){var sm=document.getElementById('setupModal');if(sm)sm.style.display='none';var ma=document.getElementById('mainApp');if(ma)ma.style.display='flex';var ps=document.getElementById('previewSection');if(ps)ps.style.display='flex';var bb=document.getElementById('bannerBar');if(bb)bb.style.display='';})();}catch(e){console.warn('startup',e);}
-try{ _offerAutoRestore(); }catch(e){ console.warn('offerRestore',e); }
+/* v3.7.6 — '이전 작업 데이터가 있습니다' 안내바 폐지 + 브라우저 히스토리 저장 중단.
+   localStorage는 같은 github.io 주소의 다른 사이트들과 약 5MB를 나눠 쓰는데,
+   자동저장(원본 시트 포함)+백업 5개가 2MB 넘게 차지하고 있었다. 데이터 보관은 캠페인(클라우드)이 맡는다.
+   남아 있던 히스토리는 지워서 공간을 돌려준다. */
+try{ localStorage.removeItem(AUTOSAVE_KEY); localStorage.removeItem(AUTOSAVE_BAK_KEY); }catch(e){window._qmSoft&&window._qmSoft('dropLocalHistory',e);}
 window.__qmBooted=true;   /* 여기까지 왔으면 본문 스크립트가 끝까지 실행된 것 */
 /* ═══ 진단 패널 — 주소 뒤에 ?debug=1 ═══
    "이상하게 동작한다"는 신고를 받았을 때 동료에게 ?debug=1 링크만 보내면
@@ -11813,7 +11892,7 @@ window._fbReady=false; window._fbUser=null; window._fbCurrentCampaign=null; wind
   try{
     firebase.initializeApp(cfg);
     window._fbAuth=firebase.auth(); window._fbDb=firebase.firestore(); window._fbReady=true;
-    _fbAuth.onAuthStateChanged(function(u){ window._fbUser=u; _fbUpdateUI(); if(u){_fbOnLogin();} });
+    _fbAuth.onAuthStateChanged(function(u){ window._fbUser=u; if(!u)window._fbSettingsReady=false; _fbUpdateUI(); if(u){_fbOnLogin();} });
   }catch(e){ console.warn('firebase init',e); }
   try{_fbUpdateUI();}catch(e){}
 })();
@@ -11901,10 +11980,17 @@ function _fbApplyViewState(vs){
 }
 function _fbUserDoc(){ return _fbDb.collection('users').doc(_fbUser.uid); }
 function _fbCampCol(){ return _fbUserDoc().collection('campaigns'); }
-function _fbSaveSettings(){ if(!window._fbUser||!window._fbDb)return; try{ var st=(typeof _currentSettings==='function')?_currentSettings():null; if(st)_fbUserDoc().set({settings:st,updatedAt:Date.now()},{merge:true}); }catch(e){console.warn('fbSaveSettings',e);} }
+function _fbSaveSettings(){ if(!window._fbUser||!window._fbDb)return;
+  /* v3.7.6 — 로그인 직후 계정 설정을 아직 못 받아 온 상태에서 저장하면, 이 PC의 기본값(또는 옛 설정)이
+     계정의 개인 매핑을 덮어쓴다. 받아 온 뒤에만 저장한다. */
+  if(!window._fbSettingsReady)return;
+  try{ var st=(typeof _currentSettings==='function')?_currentSettings():null; if(st)_fbUserDoc().set({settings:st,updatedAt:Date.now()},{merge:true}); }catch(e){console.warn('fbSaveSettings',e);} }
 function _fbOnLogin(){
   if(!window._fbDb)return;
+  window._fbSettingsReady=false;
   _fbUserDoc().get().then(function(d){
+    window._fbSettingsReady=true;
+    if(!(d.exists&&d.data().settings)){ try{ _fbSaveSettings(); }catch(e){window._qmSoft&&window._qmSoft('_fbOnLogin#first',e);} }   /* 계정에 설정이 처음이면 현재 설정을 올린다 */
     if(d.exists&&d.data().settings){ try{ var _fs=d.data().settings; if(typeof _qmSanitizeSettings==='function')_fs=_qmSanitizeSettings(_fs); localStorage.setItem('cusheet_rules_v1',JSON.stringify(_fs)); if(typeof loadRules==='function')loadRules(); if(typeof renderLivePreview==='function')renderLivePreview(); if(typeof renderCalendarTab==='function')renderCalendarTab(); }catch(e){console.warn(e);} }
   }).catch(function(e){console.warn('load settings',e);});
   showSaveToast&&showSaveToast('로그인됨 · 설정을 계정에서 불러왔습니다.');
@@ -12003,7 +12089,7 @@ function _fbRenderCampList(){
       h+='<div draggable="true" ondragstart="fbCampDragStart(event,\''+doc.id+'\')" ondragover="fbCampDragOver(event,this)" ondragleave="fbCampDragLeave(event,this)" ondrop="fbCampDrop(event,this,\''+doc.id+'\')"'
         +' style="display:flex;align-items:center;gap:6px;padding:7px 6px;border-radius:7px;margin-bottom:3px;cursor:grab;border:1px solid '+(cur?'#8bb8e8':'transparent')+';background:'+(cur?'#eaf3fd':'transparent')+'">'
         +'<span style="color:#bbb;font-size:.72rem">⠿</span>'
-        +'<div style="flex:1;min-width:0"><b style="font-size:.75rem">'+esc(d.name||doc.id)+'</b>'+(cur?' <span style="color:#0068b5;font-size:.6rem;font-weight:700">● 편집 중</span>':'')
+        +'<div style="flex:1;min-width:0"><b class="fb-camp-name'+(cur?'':' fb-camp-open')+'"'+(cur?'':' onclick="fbLoadCampaign(\''+doc.id+'\')" title="클릭하면 이 캠페인을 엽니다"')+' style="font-size:.75rem">'+esc(d.name||doc.id)+'</b>'+(cur?' <span style="color:#0068b5;font-size:.6rem;font-weight:700">● 편집 중</span>':'')
         +'<br><span style="color:#aaa;font-size:.6rem">'+(d.updatedAt?new Date(d.updatedAt).toLocaleString():'')+(d.rowCount?(' · '+d.rowCount+'행'):'')+'</span>'
         +(cur?'<br><span id="fbSaveStatus" style="font-size:.62rem;color:#7a7a7a"></span>':'')+'</div>'
         +(cur?'<button onclick="fbSaveCampaign()" title="현재 편집 내용을 이 캠페인에 저장합니다" style="font-size:.64rem;padding:4px 10px;border:none;border-radius:5px;background:#1d7a46;color:#fff;cursor:pointer;font-weight:700">저장</button>'

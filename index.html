@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Q-Mate v3.7.0 - 방송사 큐시트 관리 사이트</title>
-<script>window.QM_VERSION='v3.7.2 / 2026-09-28';</script>
+<script>window.QM_VERSION='v3.7.5 / 2026-10-15';</script>
 <script>
 /* ═══ 시작 오류 수집기 (2026-08-25) ═══
    예전에는 스크립트가 어디서든 한 번 죽으면 mainApp이 display:none인 채로 남아
@@ -1089,9 +1089,24 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
         <label style="display:flex;align-items:center;gap:8px">찾을 텍스트 <input id="frFind" oninput="frUpdateCount()" style="flex:1;padding:5px;border:1px solid #bbb;border-radius:5px"></label>
         <label style="display:flex;align-items:center;gap:8px">바꿀 텍스트 <input id="frReplace" style="flex:1;padding:5px;border:1px solid #bbb;border-radius:5px"></label>
         <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="frWhole" onchange="frUpdateCount()">셀 전체가 정확히 일치할 때만</label>
+        <div style="display:flex;align-items:center;gap:8px">적용 범위
+          <div class="fr-scope" role="radiogroup" aria-label="찾아 바꾸기 적용 범위">
+            <label><input type="radio" name="frScope" value="filtered" checked onchange="frScopeChange()"><span id="frScopeFiltered">필터된 행만</span></label>
+            <label><input type="radio" name="frScope" value="all" onchange="frScopeChange()"><span id="frScopeAll">전체 행 (필터 무시)</span></label>
+          </div>
+        </div>
         <div id="frCount" style="color:var(--muted);font-size:.74rem;min-height:16px"></div>
         <button onclick="frApply()" style="padding:7px;background:#0068b5;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer">바꾸기 실행</button>
-        <div style="color:var(--muted);font-size:.68rem;line-height:1.5">※ 현재 필터로 보이는 행에만 적용됩니다. 날짜 열은 자동 재계산 없이 텍스트만 바뀝니다.</div>
+        <div id="frScopeNote" style="color:var(--muted);font-size:.68rem;line-height:1.5">※ 현재 필터로 보이는 행에만 적용됩니다. 날짜 열은 자동 재계산 없이 텍스트만 바뀝니다.</div>
+        <style>
+          .fr-scope{display:inline-flex;flex:1;border:1px solid #bbb;border-radius:6px;overflow:hidden}
+          .fr-scope label{flex:1;display:flex;cursor:pointer}
+          .fr-scope input{position:absolute;opacity:0;pointer-events:none}
+          .fr-scope span{flex:1;text-align:center;padding:5px 6px;font-size:.74rem;color:#444;background:#fff;white-space:nowrap}
+          .fr-scope label+label span{border-left:1px solid #bbb}
+          .fr-scope input:checked+span{background:#0068b5;color:#fff;font-weight:700}
+          .fr-scope input:focus-visible+span{outline:2px solid #0068b5;outline-offset:-2px}
+        </style>
       </div>
     </div>
   </div>
@@ -1269,6 +1284,7 @@ var DEFAULT_BROADCAST_RULES=[
   {channel:'iHQ',type:'케이블/종편'},{channel:'iHQ drama',type:'케이블/종편'},{channel:'iHQ show',type:'케이블/종편'},{channel:'SANDBOX+',type:'케이블/종편'},
   {channel:'SPOTV',type:'케이블/종편'},{channel:'SPOTV2',type:'케이블/종편'},{channel:'SPOTV PRIME,PRIME2,PRIME+',type:'케이블/종편'},
   {channel:'SPOTV PRIME',type:'케이블/종편'},{channel:'SPOTV 전채널 공통',type:'케이블/종편'},
+  {channel:'SPOTV Golf+',type:'케이블/종편'},{channel:'SPOTV/SPOTV2',type:'케이블/종편'},
   {channel:'채널S',type:'케이블/종편'},{channel:'TV조선',type:'케이블/종편'},{channel:'TV조선2',type:'케이블/종편'},
   {channel:'채널A',type:'케이블/종편'},{channel:'MBN',type:'케이블/종편'},
 ];
@@ -1356,6 +1372,7 @@ var DEFAULT_PP_RULES=[
   {channel:'MBN',mpp:'MBN'},
   {channel:'SPOTV',mpp:'SPOTV'},{channel:'SPOTV2',mpp:'SPOTV'},{channel:'SPOTV PRIME,PRIME2,PRIME+',mpp:'SPOTV'},
   {channel:'SPOTV PRIME',mpp:'SPOTV'},{channel:'SPOTV 전채널 공통',mpp:'SPOTV'},
+  {channel:'SPOTV Golf+',mpp:'SPOTV'},{channel:'SPOTV/SPOTV2',mpp:'SPOTV'},
   {channel:'연합뉴스TV',mpp:'연합뉴스TV'},
   {channel:'YTN',mpp:'YTN'},
   {channel:'엣지티비',mpp:'엣지티비'},
@@ -1703,6 +1720,11 @@ function getBroadcastType(channel){
   for(var i=0;i<broadcastRules.length;i++){
     var r=broadcastRules[i];
     if(r.channel&&r.channel.normalize('NFC').toLowerCase()===chL)return r.type||'';
+  }
+  /* 개인 규칙에 없는 채널은 기본 규칙으로 (저장된 옛 규칙엔 새 기본 채널이 빠져 있다) */
+  for(var j=0;j<DEFAULT_BROADCAST_RULES.length;j++){
+    var d=DEFAULT_BROADCAST_RULES[j];
+    if(d.channel&&d.channel.normalize('NFC')===ch)return d.type||'';
   }
   return'';
 }
@@ -2332,6 +2354,9 @@ function _spotvNormCh(v){
   if(!/SPOTV/.test(u))return'';
   if(/전\s*채널|外|외/.test(raw))return'SPOTV 전채널 공통';   /* 'SPOTV外 전채널' — PRIME보다 먼저 본다 */
   if(/PRIME/.test(u))return'SPOTV PRIME';
+  /* 'SPOTV\nor\nSPOTV2' — 둘 중 한 채널에 나가는 행 (2026-10 BMW 큐시트) */
+  if(/^SPOTV\s*(OR|\/|,|&|\+|또는)\s*SPOTV\s*2\b/.test(u))return'SPOTV/SPOTV2';
+  if(/GOLF/.test(u))return'SPOTV Golf+';                       /* 'SPOTV Golf+' — 예전엔 SPOTV로 뭉개졌다 */
   if(/^SPOTV\s*2\b/.test(u))return'SPOTV2';
   return'SPOTV';
 }
@@ -2397,18 +2422,29 @@ function genDatesFromDOWOverPool(wdObj,pool){
     var w=WDAYS[(dt.getUTCDay()+6)%7];
     (byDow[w]=byDow[w]||[]).push(d);
   });
-  var out=[];
+  var out=[], _orphanNeed=0, _usedDow={};
   WDAYS.forEach(function(w){
     var need=+String((wdObj&&wdObj[w])||'').replace(/\.0*$/,'')||0;
     if(need<=0)return;
     var days=byDow[w]||[];
-    if(!days.length)return;                                        /* 그 요일 날짜가 비고에 없으면 버린다 */
+    if(!days.length){ _orphanNeed+=need; return; }                 /* 그 요일 날짜가 비고에 없음 → 아래에서 처리 */
+    _usedDow[w]=1;
     var base=Math.floor(need/days.length), rem=need%days.length;
     days.forEach(function(d,idx){
       var n=base+(idx<rem?1:0);                                    /* 나머지는 앞 날짜 우선 */
       for(var i=0;i<n;i++)out.push(d);
     });
   });
+  /* 심야 편성(일요일 칸 + 비고는 월요일 날짜 '02:00')처럼 요일 칸과 비고 날짜의 요일이 어긋나는 경우:
+     어느 요일 칸에도 안 쓰인 비고 날짜에 남은 횟수를 나눠 준다(없으면 전체 풀). 총 횟수는 항상 보존. */
+  if(_orphanNeed>0){
+    var spare=pool.filter(function(d){
+      var w=WDAYS[(new Date(d+'T00:00:00Z').getUTCDay()+6)%7]; return !_usedDow[w];
+    });
+    if(!spare.length)spare=pool.slice();
+    var b2=Math.floor(_orphanNeed/spare.length), r2=_orphanNeed%spare.length;
+    spare.forEach(function(d,idx){ var n2=b2+(idx<r2?1:0); for(var i=0;i<n2;i++)out.push(d); });
+  }
   out.sort();
   return out;
 }
@@ -9948,6 +9984,64 @@ function pvSelectRect(r1,r2,colA,colB){
   var lo=Math.min(pa,pb),hi=Math.max(pa,pb);
   for(var r=r1;r<=r2;r++){ for(var p=lo;p<=hi;p++){ var cell=document.querySelector('.pv-editable-cell[data-row="'+r+'"][data-col="'+vis[p]+'"]'); if(cell)pvSelectCell(cell); } }
 }
+/* ══ 드래그 선택 보정 (2026-10-02) ══════════════════════════════
+   증상: 가로·세로로는 끌리는데 **대각선으로 끌면 범위가 안 따라온다.**
+   원인: onMove 가 `elementFromPoint(...).closest('.pv-editable-cell')` 로만 대상을 찾고,
+         못 찾으면 그냥 return 했다. 그런데 표에는 겹쳐 떠 있는 요소가 둘 있다 —
+           · 행번호 칸  `position:sticky; left:0`
+           · 머리글 th  `position:sticky; top:0`
+         대각선은 거의 항상 위쪽이나 왼쪽으로 치우치므로 이 둘 위를 지나게 되고,
+         그 순간 대상이 null 이 되어 **범위가 그 자리에서 얼어붙었다.**
+         (순수 가로·세로 드래그는 이 영역을 안 건드려서 멀쩡해 보였다.)
+   해결: 포인터가 셀 밖이면 포기하지 말고, **데이터 영역 안쪽으로 좌표를 끌어당겨서**
+         (고정 행번호 폭·고정 머리글 높이만큼 밀어 넣고 표 경계로 클램프) 다시 찾는다.
+         좌표 한 번만 보정하므로 행이 몇 천이든 비용은 일정하다. */
+function _pvClampToGrid(x,y){
+  var wrap=document.getElementById('previewTableWrap'); if(!wrap)return null;
+  var tb=wrap.querySelector('tbody'); if(!tb)return null;
+  var wr=wrap.getBoundingClientRect(), tr=tb.getBoundingClientRect();
+  var rn=tb.querySelector('td.pv-row-num');
+  var rnW=rn?rn.getBoundingClientRect().width:0;          /* 왼쪽 고정 칸 */
+  var th=wrap.querySelector('thead');
+  var thH=th?th.getBoundingClientRect().height:0;         /* 위쪽 고정 머리글 */
+  var minX=Math.max(wr.left+rnW,tr.left)+3, maxX=Math.min(wr.right,tr.right)-3;
+  var minY=Math.max(wr.top+thH,tr.top)+3,   maxY=Math.min(wr.bottom,tr.bottom)-3;
+  if(maxX<minX||maxY<minY)return null;
+  return {x:Math.min(Math.max(x,minX),maxX), y:Math.min(Math.max(y,minY),maxY)};
+}
+function _pvCellAtPoint(x,y){
+  var el=document.elementFromPoint(x,y);
+  var td=(el&&el.closest)?el.closest('.pv-editable-cell'):null;
+  if(td)return td;
+  var cl=_pvClampToGrid(x,y); if(!cl)return null;
+  el=document.elementFromPoint(cl.x,cl.y);
+  return (el&&el.closest)?el.closest('.pv-editable-cell'):null;
+}
+/* 표 밖으로 끌고 나가면 따라서 스크롤한다(엑셀과 동일). 없으면 화면에 보이는
+   만큼까지만 선택돼서 "쭉 끌어도 더 안 잡힌다"가 된다. */
+var _pvDragPt=null,_pvDragTimer=null;
+function _pvDragAutoScroll(){
+  var wrap=document.getElementById('previewTableWrap');
+  if(!wrap||!_pvDragPt||!_pvMouseSelecting)return;
+  var r=wrap.getBoundingClientRect(), Z=30, dx=0, dy=0;
+  if(_pvDragPt.y<r.top+Z)        dy=-Math.min(40,Math.max(10,(r.top+Z)-_pvDragPt.y));
+  else if(_pvDragPt.y>r.bottom-Z)dy= Math.min(40,Math.max(10,_pvDragPt.y-(r.bottom-Z)));
+  if(_pvDragPt.x<r.left+Z)       dx=-Math.min(40,Math.max(10,(r.left+Z)-_pvDragPt.x));
+  else if(_pvDragPt.x>r.right-Z) dx= Math.min(40,Math.max(10,_pvDragPt.x-(r.right-Z)));
+  if(!dx&&!dy)return;
+  var t0=wrap.scrollTop,l0=wrap.scrollLeft;
+  wrap.scrollTop+=dy; wrap.scrollLeft+=dx;
+  if(wrap.scrollTop!==t0||wrap.scrollLeft!==l0)_pvDragExtend(_pvDragPt.x,_pvDragPt.y);
+}
+/* 앵커 → 현재 지점으로 사각 범위를 다시 그린다 */
+function _pvDragExtend(x,y){
+  if(!_pvSelAnchor)return;
+  var target=_pvCellAtPoint(x,y); if(!target)return;
+  var ar=+_pvSelAnchor.getAttribute('data-row'), ac=+_pvSelAnchor.getAttribute('data-col');
+  var tr2=+target.getAttribute('data-row'), tc=+target.getAttribute('data-col');
+  if(!isFinite(ar)||!isFinite(tr2))return;
+  pvSelectRect(Math.min(ar,tr2),Math.max(ar,tr2),ac,tc);
+}
 function pvCellContextMenu(e,td){
   e.preventDefault();
   var ri=+td.getAttribute('data-row');
@@ -9973,18 +10067,19 @@ function pvCellMouseDown(e,td){
     var _ar=+_pvSelAnchor.getAttribute('data-row'),_ac=+_pvSelAnchor.getAttribute('data-col');
     pvSelectRect(Math.min(_ar,+td.getAttribute('data-row')),Math.max(_ar,+td.getAttribute('data-row')),_ac,+td.getAttribute('data-col'));
   }
-  var origTd=td;
+  var _wrap=document.getElementById('previewTableWrap');
+  _pvDragPt=null;
+  if(_pvDragTimer)clearInterval(_pvDragTimer);
+  _pvDragTimer=setInterval(_pvDragAutoScroll,60);   /* 표 밖으로 나가면 자동 스크롤 */
   function onMove(ev){
-    var el=document.elementFromPoint(ev.clientX,ev.clientY);
-    if(!el)return;
-    var target=el.closest('.pv-editable-cell');
-    if(!target)return;
-    var ar=+_pvSelAnchor.getAttribute('data-row'), ac=+_pvSelAnchor.getAttribute('data-col');
-    var tr=+target.getAttribute('data-row'), tc=+target.getAttribute('data-col');
-    pvSelectRect(Math.min(ar,tr),Math.max(ar,tr),ac,tc);
+    if(ev.buttons===0){ onUp(); return; }           /* 창 밖에서 뗀 경우 안전 종료 */
+    _pvDragPt={x:ev.clientX,y:ev.clientY};
+    _pvDragExtend(ev.clientX,ev.clientY);
   }
   function onUp(){
     _pvMouseSelecting=false;
+    _pvDragPt=null;
+    if(_pvDragTimer){clearInterval(_pvDragTimer);_pvDragTimer=null;}
     document.removeEventListener('mousemove',onMove);
     document.removeEventListener('mouseup',onUp);
   }
@@ -10030,6 +10125,37 @@ document.addEventListener('keydown',function(e){
         try{ var _fd=document.getElementById('frFind'); if(_fd){_fd.focus();_fd.select();} }catch(_x){}
       },_wasOpen?0:50);
       return;
+    }
+  }
+
+  /* ═══ Ctrl+A : 대시보드의 모든 셀 선택 (2026-10-02) ═══
+     ⚠️ 예전에는 아래 `if(!_pvSelectedCells.length)return;` 보다 **뒤**에 있어서
+        셀을 하나도 안 고른 상태에서는 아무 일도 일어나지 않았다. 가드 앞으로 옮긴다.
+     ⚠️ 드롭다운 셀(채널·요일·본방여부)을 클릭하면 <select>에 포커스가 남는다.
+        그대로 두면 이어지는 Ctrl+C 같은 키를 select 가 먹으므로 포커스를 표로 돌린다.
+        (단, 네이티브 드롭다운 목록이 **펼쳐져 있는 동안**에는 OS가 키보드를 가져가
+         keydown 자체가 오지 않는다 — 이건 브라우저 영역이라 손댈 수 없다.) */
+  if((e.ctrlKey||e.metaKey)&&(e.key==='a'||e.key==='A')&&!e.shiftKey&&!_pvEditingCell){
+    var _ae2=document.activeElement;
+    var _typing=!!(_ae2&&(_ae2.tagName==='INPUT'||_ae2.tagName==='TEXTAREA'||_ae2.isContentEditable));
+    var _wrapA=document.getElementById('previewTableWrap');
+    var _openOverlay=document.querySelector('.gp-overlay.open')
+      ||(function(){var o=document.getElementById('colConfigOverlay');return (o&&o.classList.contains('open'))?o:null;})()
+      ||(function(){var o=document.getElementById('settingsPanel');return (o&&o.classList.contains('open'))?o:null;})();
+    if(!_typing&&!_openOverlay&&_wrapA&&_wrapA.offsetParent!==null){
+      var _vc=(window._pvVisCols&&window._pvVisCols.length)?window._pvVisCols:((_colConfig&&_colConfig.length)?_colConfig:_defaultColConfig());
+      var _mr=(_pvFilteredRows?_pvFilteredRows.length:0)-1;
+      if(_mr>=0&&_vc.length){
+        e.preventDefault(); e.stopPropagation();
+        if(_ae2&&_ae2.tagName==='SELECT'){ try{_ae2.blur();}catch(_x){} }
+        pvSelectRect(0,_mr,_vc[0],_vc[_vc.length-1]);
+        var _first=document.querySelector('.pv-editable-cell[data-row="0"][data-col="'+_vc[0]+'"]');
+        if(_first){_pvSelAnchor=_first;_pvAnchorRow=0;_pvAnchorCol=_vc[0];}
+        window._pvFocusRow=_mr; window._pvFocusCol=_vc[_vc.length-1];
+        _wrapA.tabIndex=-1; try{_wrapA.focus({preventScroll:true});}catch(_x){}
+        try{ var _sx=window.getSelection(); if(_sx)_sx.removeAllRanges(); }catch(_x){}
+        return;
+      }
     }
   }
 
@@ -10107,23 +10233,6 @@ document.addEventListener('keydown',function(e){
       if(wrap){wrap.tabIndex=-1;wrap.focus({preventScroll:true});}
     }
     return; // prevent any other handling
-  }
-
-  // Ctrl+A : 현재 화면의 모든 셀 선택
-  if((e.ctrlKey||e.metaKey)&&(e.key==='a'||e.key==='A')&&!_pvEditingCell){
-    var _ae2=document.activeElement;
-    if(!(_ae2&&(_ae2.tagName==='INPUT'||_ae2.tagName==='TEXTAREA'||_ae2.isContentEditable))){
-      e.preventDefault();
-      var _vc=(window._pvVisCols&&window._pvVisCols.length)?window._pvVisCols:((_colConfig&&_colConfig.length)?_colConfig:_defaultColConfig());
-      var _mr=(_pvFilteredRows?_pvFilteredRows.length:0)-1;
-      if(_mr>=0&&_vc.length){
-        pvSelectRect(0,_mr,_vc[0],_vc[_vc.length-1]);
-        var _first=document.querySelector('.pv-editable-cell[data-row="0"][data-col="'+_vc[0]+'"]');
-        if(_first){_pvSelAnchor=_first;_pvAnchorRow=0;_pvAnchorCol=_vc[0];}
-        window._pvFocusRow=_mr; window._pvFocusCol=_vc[_vc.length-1];
-      }
-      return;
-    }
   }
 
   // Copy
@@ -10681,9 +10790,32 @@ function openFindReplace(){
   var fd=document.getElementById('frFind'); if(fd)fd.value='';
   var rp=document.getElementById('frReplace'); if(rp)rp.value='';
   var cnt=document.getElementById('frCount'); if(cnt)cnt.textContent='';
+  /* 적용 범위: 지난번 선택을 기억(기본=필터된 행만) */
+  var _sc='filtered'; try{ _sc=localStorage.getItem('qm_fr_scope')==='all'?'all':'filtered'; }catch(e){}
+  document.querySelectorAll('input[name="frScope"]').forEach(function(x){ x.checked=(x.value===_sc); });
+  frScopeChange(true);
   openPopup('findreplace');
 }
-function _frRows(){ return (_pvFilteredRows&&_pvFilteredRows.length)?_pvFilteredRows:((_liveRows&&_liveRows.length>1)?_liveRows.slice(1):[]); }
+/* 찾아 바꾸기 적용 범위 토글 (2026-10-15) — 'filtered'=대시보드 필터로 보이는 행만 / 'all'=필터와 무관하게 전체 */
+function _frScope(){ var x=document.querySelector('input[name="frScope"]:checked'); return (x&&x.value==='all')?'all':'filtered'; }
+function _frAllRows(){ return (_liveRows&&_liveRows.length>1)?_liveRows.slice(1):[]; }
+function _frFilteredRows(){
+  /* 필터 결과가 0행이면 0행 그대로(예전엔 전체로 넘어가 필터 밖 행까지 바뀌었다) */
+  return Array.isArray(_pvFilteredRows)?_pvFilteredRows:_frAllRows();
+}
+function _frRows(){ return _frScope()==='all'?_frAllRows():_frFilteredRows(); }
+function frScopeChange(silent){
+  var all=_frAllRows().length, flt=_frFilteredRows().length;
+  var a=document.getElementById('frScopeFiltered'); if(a)a.textContent='필터된 행만 ('+flt.toLocaleString()+'행)';
+  var b=document.getElementById('frScopeAll'); if(b)b.textContent='전체 행 ('+all.toLocaleString()+'행)';
+  var sc=_frScope();
+  var note=document.getElementById('frScopeNote');
+  if(note)note.textContent=(sc==='all'
+    ?'※ 필터와 관계없이 모든 행에 적용됩니다'+(flt<all?' — 화면에 안 보이는 '+(all-flt).toLocaleString()+'행도 바뀝니다.':'.')
+    :'※ 현재 필터로 보이는 행에만 적용됩니다.')+' 날짜 열은 자동 재계산 없이 텍스트만 바뀝니다.';
+  if(!silent){ try{ localStorage.setItem('qm_fr_scope',sc); }catch(e){} }
+  frUpdateCount();
+}
 function frUpdateCount(){
   var cnt=document.getElementById('frCount'); if(!cnt)return;
   var col=+(document.getElementById('frCol')||{}).value;
@@ -10691,7 +10823,7 @@ function frUpdateCount(){
   var whole=(document.getElementById('frWhole')||{}).checked;
   if(!find){ cnt.textContent=''; return; }
   var n=0; _frRows().forEach(function(r){ var v=String(r[col]==null?'':r[col]); if(whole?(v===find):(v.indexOf(find)>=0))n++; });
-  cnt.textContent=n+'개 셀에서 발견됨';
+  cnt.textContent=n+'개 셀에서 발견됨'+(_frScope()==='all'?' (전체 행 기준)':' (필터된 행 기준)');
 }
 function frApply(){
   var col=+(document.getElementById('frCol')||{}).value;

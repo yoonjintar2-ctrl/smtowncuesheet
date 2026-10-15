@@ -25,7 +25,7 @@
 <meta name="twitter:title" content="Q-Mate · 방송사 큐시트, 한 번에 정리">
 <meta name="twitter:description" content="방송사마다 제각각인 TV 광고 큐시트 엑셀을 한 번에 올려 하나의 형식으로 정리하고, 요약·캘린더·편성표까지 바로 만드는 큐시트 관리 프로그램입니다.">
 <meta name="twitter:image" content="https://cuesheet.jintar.co.kr/og-image.png">
-<script>window.QM_VERSION='v3.7.8 / 2026-10-15';</script>
+<script>window.QM_VERSION='v3.7.9 / 2026-10-15';</script>
 <script>
 /* ═══ 시작 오류 수집기 (2026-08-25) ═══
    예전에는 스크립트가 어디서든 한 번 죽으면 mainApp이 display:none인 채로 남아
@@ -975,7 +975,7 @@ tr.pv-checked-row td.pv-row-num{box-shadow:inset 3px 0 0 #0068b5}
   <div class="sp-hd">
     <span class="sp-hd-title">세부 설정</span>
     <div class="sp-hd-acts">
-      <button onclick="saveRulesToFile();showSaveToast('설정이 저장되었습니다.')" style="padding:4px 14px;background:#1a7a50;color:#fff;border:none;border-radius:5px;font-size:.72rem;font-weight:600;cursor:pointer;margin-right:8px">설정 저장</button>
+      <button onclick="qmSaveSettingsNow()" style="padding:4px 14px;background:#1a7a50;color:#fff;border:none;border-radius:5px;font-size:.72rem;font-weight:600;cursor:pointer;margin-right:8px">설정 저장</button>
       <button class="sp-close" onclick="closeSettings()">✕ 닫기</button>
     </div>
   </div>
@@ -1576,6 +1576,15 @@ function syncSettingsQuiet(){
   clearTimeout(_pvSyncTimer);
   _pvSyncTimer=setTimeout(function(){ try{ saveRulesToFile(true); }catch(e){window._qmSoft&&window._qmSoft('syncSettingsQuiet',e);} },1200);
 }
+/* [설정 저장] 버튼 (v3.7.9) — 계정(클라우드)에 실제로 기록됐는지 확인한 뒤에 알린다 */
+function qmSaveSettingsNow(){
+  saveRulesToFile(true);
+  if(!window._fbUser){ showSaveToast('이 브라우저에 저장했습니다. (구글 로그인하면 계정에 저장되어 어디서나 유지됩니다)','warn'); return; }
+  var pr=window._qmLastSettingsSave;
+  if(!pr||!pr.then){ showSaveToast('계정 설정을 아직 불러오는 중입니다. 잠시 후 다시 눌러 주세요.','warn'); return; }
+  showSaveToast('계정에 저장하는 중…');
+  pr.then(function(ok){ if(ok)showSaveToast('설정을 계정에 저장했습니다. 다른 PC·다음 로그인에도 그대로 유지됩니다.'); });
+}
 function saveRulesToFile(quiet){
   // Save to localStorage only — no file dialog, no download
   try{
@@ -1593,10 +1602,19 @@ function saveRulesToFile(quiet){
       _pivotCfg:window._pivotCfg||null,
       _anAnalysisOptions:window._anAnalysisOptions||{},
       _mapOrderManual:!!window._mapOrderManual,
-      _soakedOrderManual:!!window._soakedOrderManual
+      _soakedOrderManual:!!window._soakedOrderManual,
+      __savedAt:Date.now(),                                         /* v3.7.9 — 어느 쪽(브라우저/계정)이 최신인지 판단용 */
+      __uid:(window._fbUser&&window._fbUser.uid)||''
     };
+    /* 계정 설정을 이번 접속에서 아직 받아 오기 전에 생긴 자동 저장은 '최신'으로 치지 않는다
+       (새 브라우저의 기본값이 계정 설정을 덮어쓰는 사고 방지) — 이전 표시를 그대로 이어 둔다 */
+    if(!(window._fbUser&&window._fbSettingsReady)){
+      var _prevLs=null; try{ _prevLs=JSON.parse(localStorage.getItem('cusheet_rules_v1')||'null'); }catch(_e){}
+      lsData.__savedAt=(_prevLs&&+_prevLs.__savedAt)||0; lsData.__uid=(_prevLs&&_prevLs.__uid)||'';
+    }
     localStorage.setItem('cusheet_rules_v1',JSON.stringify(lsData));
-    try{ if(window._fbUser&&typeof _fbSaveSettings==='function')_fbSaveSettings(); }catch(e){window._qmSoft&&window._qmSoft('saveRulesToFile',e);}
+    window._qmLastSettingsSave=null;
+    try{ if(window._fbUser&&typeof _fbSaveSettings==='function')window._qmLastSettingsSave=_fbSaveSettings(lsData.__savedAt); }catch(e){window._qmSoft&&window._qmSoft('saveRulesToFile',e);}
     if(!quiet)showSaveToast('저장되었습니다.');
   }catch(e){
     if(!quiet)showSaveToast('저장 실패: '+e.message, true);
@@ -11923,6 +11941,13 @@ window._fbReady=false; window._fbUser=null; window._fbCurrentCampaign=null; wind
 })();
 function fbLogin(){ if(!window._fbReady){ alert('Firebase 설정이 아직 없습니다.\n온라인(https)에서 FIREBASE_CONFIG를 채우면 구글 로그인이 활성화됩니다.'); return; } var p=new firebase.auth.GoogleAuthProvider(); _fbAuth.signInWithPopup(p).catch(function(e){ showSaveToast('로그인 실패: '+e.message,'err'); }); }
 function fbLogout(){ _fbGuardUnsaved('로그아웃합니다.',function(){
+  /* v3.7.9 — 저장 중이던 설정이 있으면 계정 기록을 끝낸 뒤 로그아웃 */
+  if(window._fbSettingsPending&&window._fbSettingsReady&&!window._qmLogoutRetry){
+    window._qmLogoutRetry=true; showSaveToast('설정을 계정에 저장한 뒤 로그아웃합니다…');
+    var _pr=_fbSaveSettings(); var _go=function(){ window._qmLogoutRetry=false; window._fbSettingsPending=false; fbLogout(); };
+    if(_pr&&_pr.then){ _pr.then(_go,_go); return; }
+  }
+  window._qmLogoutRetry=false;
   if(window._fbAuth)_fbAuth.signOut();
   window._fbCurrentCampaign=null; window._fbCampName=''; window._fbLastSave=0; window._fbUser=null; window._fbViewOnly=null;
   _fbResetLocalState();
@@ -12020,8 +12045,24 @@ function _fbCampCol(){ return _fbUserDoc().collection('campaigns'); }
 function _fbSaveSettings(){ if(!window._fbUser||!window._fbDb)return;
   /* v3.7.6 — 로그인 직후 계정 설정을 아직 못 받아 온 상태에서 저장하면, 이 PC의 기본값(또는 옛 설정)이
      계정의 개인 매핑을 덮어쓴다. 받아 온 뒤에만 저장한다. */
-  if(!window._fbSettingsReady)return;
-  try{ var st=(typeof _currentSettings==='function')?_currentSettings():null; if(st)_fbUserDoc().set({settings:st,updatedAt:Date.now()},{merge:true}); }catch(e){console.warn('fbSaveSettings',e);} }
+  if(!window._fbSettingsReady){ window._fbSettingsPending=true; return null; }
+  /* v3.7.9 — 예전엔 결과를 확인하지 않아(fire-and-forget) 실패하거나 창을 바로 닫으면 조용히 사라졌다.
+     · Firestore가 거부하는 값(undefined·빈 키)은 미리 걸러 낸다
+     · settings 필드를 통째로 교체(mergeFields) — 지운 값이 계정에 남지 않게, profile 등 다른 필드는 유지 */
+  try{
+    var st=(typeof _currentSettings==='function')?_currentSettings():null; if(!st)return null;
+    st=JSON.parse(JSON.stringify(st));
+    ['progNameMap','bonbangChecked','_anItemColors'].forEach(function(k){ if(st[k]&&typeof st[k]==='object'){ delete st[k]['']; } });
+    st.__savedAt=arguments[0]||Date.now(); st.__uid=_fbUser.uid;
+    window._fbSettingsPending=true;
+    return _fbUserDoc().set({settings:st,updatedAt:Date.now()},{mergeFields:['settings','updatedAt']}).then(function(){
+      window._fbSettingsPending=false; window._fbSettingsSavedAt=Date.now(); return true;
+    }).catch(function(e){
+      window._fbSettingsPending=true;
+      try{ showSaveToast('⚠ 설정을 계정에 저장하지 못했습니다: '+(e&&e.message||e)+'\n(이 브라우저에는 저장됨 — 다음 로그인 때 다시 올립니다)','err'); }catch(_e){}
+      return false;
+    });
+  }catch(e){ console.warn('fbSaveSettings',e); return null; } }
 function _fbOnLogin(){
   if(!window._fbDb)return;
   window._fbSettingsReady=false;
@@ -12030,10 +12071,27 @@ function _fbOnLogin(){
     window._fbSettingsReady=true;
     if(!(d.exists&&d.data().settings)){ try{ _fbSaveSettings(); }catch(e){window._qmSoft&&window._qmSoft('_fbOnLogin#first',e);} }   /* 계정에 설정이 처음이면 현재 설정을 올린다 */
     try{ _qmAutoOpenCampaigns(); }catch(e){window._qmSoft&&window._qmSoft('autoOpenCamp',e);}
-    if(d.exists&&d.data().settings){ try{ var _fs=d.data().settings; if(typeof _qmSanitizeSettings==='function')_fs=_qmSanitizeSettings(_fs); localStorage.setItem('cusheet_rules_v1',JSON.stringify(_fs)); if(typeof loadRules==='function')loadRules(); if(typeof renderLivePreview==='function')renderLivePreview(); if(typeof renderCalendarTab==='function')renderCalendarTab(); }catch(e){console.warn(e);} }
+    if(d.exists&&d.data().settings){ try{
+      var _fs=d.data().settings;
+      /* v3.7.9 — 같은 계정으로 이 브라우저에서 저장한 설정이 계정 것보다 최신이면(=계정 기록이 실패·유실됨)
+         계정 것으로 덮어쓰지 않고, 이 브라우저 설정을 계정에 다시 올린다. */
+      var _loc=null; try{ _loc=JSON.parse(localStorage.getItem('cusheet_rules_v1')||'null'); }catch(_e){}
+      if(_loc&&_loc.__uid===_fbUser.uid&&(+_loc.__savedAt||0)>(+_fs.__savedAt||0)){
+        var _pr=_fbSaveSettings(_loc.__savedAt);
+        if(_pr&&_pr.then)_pr.then(function(ok){ if(ok)showSaveToast('이 브라우저의 최신 설정을 계정에 반영했습니다.'); });
+        return;
+      }
+      if(typeof _qmSanitizeSettings==='function')_fs=_qmSanitizeSettings(_fs);
+      _fs.__uid=_fbUser.uid;
+      localStorage.setItem('cusheet_rules_v1',JSON.stringify(_fs)); if(typeof loadRules==='function')loadRules(); if(typeof renderLivePreview==='function')renderLivePreview(); if(typeof renderCalendarTab==='function')renderCalendarTab();
+      try{ if(typeof renderPPChTable==='function')renderPPChTable(); if(typeof _initCprpOnSettingsOpen==='function'&&document.getElementById('mapBodySp'))_initCprpOnSettingsOpen(); }catch(_e){}
+    }catch(e){console.warn(e);} }
   }).catch(function(e){console.warn('load settings',e);});
   showSaveToast&&showSaveToast('로그인됨 · 설정을 계정에서 불러왔습니다.');
 }
+window.addEventListener('beforeunload',function(e){
+  if(window._fbUser&&window._fbSettingsReady&&window._fbSettingsPending){ e.preventDefault(); e.returnValue='설정이 아직 계정에 저장되는 중입니다.'; return e.returnValue; }
+});
 /* ═══ 캠페인 관리 (구글 계정 기반, 실시간 자동 저장) ═══ */
 window._fbLastSave=0; window._fbSaving=false;
 function _fbAgoText(){

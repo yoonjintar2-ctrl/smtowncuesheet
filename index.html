@@ -25,7 +25,7 @@
 <meta name="twitter:title" content="Q-Mate · 방송사 큐시트, 한 번에 정리">
 <meta name="twitter:description" content="방송사마다 제각각인 TV 광고 큐시트 엑셀을 한 번에 올려 하나의 형식으로 정리하고, 요약·캘린더·편성표까지 바로 만드는 큐시트 관리 프로그램입니다.">
 <meta name="twitter:image" content="https://cuesheet.jintar.co.kr/og-image.png">
-<script>window.QM_VERSION='v3.8.0 / 2026-10-26';</script>
+<script>window.QM_VERSION='v3.8.1 / 2026-10-27';</script>
 <script>
 /* ═══ 시작 오류 수집기 (2026-08-25) ═══
    예전에는 스크립트가 어디서든 한 번 죽으면 mainApp이 display:none인 채로 남아
@@ -424,6 +424,18 @@ table.pv-tbl tbody td:first-child{text-align:left;padding-left:12px;word-break:k
 .pv-cell.mid-cm{border:2px solid rgba(0,0,0,.55)!important}
 .pv-row-info{font-size:.76rem;color:var(--muted)}
 .pv-empty{text-align:center;padding:32px;color:var(--muted);font-size:.82rem}
+/* 요약 표 그림 복사 버튼 — 표 위에 마우스를 올리면 오른쪽 위에 나타남 */
+.pv-copywrap{position:relative;display:inline-block}
+.pv-copybtn{position:absolute;top:4px;right:4px;z-index:2;padding:2px 8px;font-size:.62rem;font-weight:700;color:#333;background:rgba(255,255,255,.95);border:1px solid #bbb;border-radius:5px;cursor:pointer;opacity:0;transition:opacity .12s;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.pv-copywrap:hover .pv-copybtn,.pv-copybtn:focus-visible{opacity:1}
+.pv-copybtn:hover{background:#fff;border-color:#0068b5;color:#0068b5}
+.pv-copybtn:disabled{opacity:1;cursor:wait;color:#888}
+/* 대시보드: 필터 때문에 보이는 행이 없을 때 가운데 안내 */
+.pv-filter-empty{position:absolute;left:0;right:0;top:46%;transform:translateY(-50%);text-align:center;pointer-events:none}
+.pv-filter-empty .box{display:inline-block;pointer-events:auto;background:#fff;border:1px solid #e3e3e8;border-radius:12px;padding:18px 26px;box-shadow:0 6px 22px rgba(0,0,0,.08)}
+.pv-filter-empty b{display:block;font-size:.95rem;color:#222;margin-bottom:4px}
+.pv-filter-empty span{display:block;font-size:.74rem;color:#888;margin-bottom:12px}
+.pv-filter-empty button{padding:6px 16px;border:none;border-radius:6px;background:#0068b5;color:#fff;font-weight:700;font-size:.76rem;cursor:pointer}
 .pv-dow-cell{font-size:.71rem;font-weight:500}
 /* 본방 row highlight */
 tr.pv-bonbang-row td{background:rgba(224,0,90,.09)!important;border-top:1px solid rgba(224,0,90,.25)!important}
@@ -4185,7 +4197,35 @@ function _pivotTableHTML(){
     +parts.join('')
     +(anyPct?'<span style="display:inline-block;margin-left:12px;color:#aaa">(%는 행 합계 기준)</span>':'')+'</div>';
   /* 표와 같은 폭을 갖는 래퍼로 감싸 캡션 오른쪽 끝을 표 오른쪽 끝에 맞춘다 */
-  return '<div style="display:inline-block;min-width:100%;box-sizing:border-box">'+cap+t+'</div>';
+  return '<div style="display:inline-block;min-width:100%;box-sizing:border-box">'+cap
+    +'<div class="pv-copywrap">'+t+'<button type="button" class="pv-copybtn" onclick="pvCopyTableImage(this)" title="이 표를 그림으로 클립보드에 복사합니다 (카톡·메일·PPT에 Ctrl+V)">⧉ 그림 복사</button></div></div>';
+}
+/* v3.8.1 — 요약 표를 그림(PNG)으로 클립보드에 복사. 복사가 막힌 환경(로컬 파일 등)에서는 PNG로 내려받는다 */
+function pvCopyTableImage(btn){
+  var wrap=btn&&btn.closest('.pv-copywrap'); var tbl=wrap&&wrap.querySelector('table'); if(!tbl)return;
+  if(typeof html2canvas!=='function'){ showSaveToast('그림 만들기 도구를 불러오지 못했습니다.','err'); return; }
+  if(btn.disabled)return; btn.disabled=true; var _old=btn.textContent; btn.textContent='만드는 중…';
+  var fin=function(){ btn.disabled=false; btn.textContent=_old; };
+  var W=Math.ceil(tbl.scrollWidth), H=Math.ceil(tbl.scrollHeight);
+  var scale=Math.min(2, Math.max(1, Math.floor(16000000/Math.max(1,W*H*4))||1));
+  html2canvas(tbl,{scale:scale,backgroundColor:'#ffffff',logging:false,useCORS:true,windowWidth:Math.max(document.documentElement.clientWidth,W+40)})
+  .then(function(cv){ return new Promise(function(res,rej){ cv.toBlob(function(bl){ bl?res(bl):rej(new Error('그림을 만들지 못했습니다')); },'image/png'); }); })
+  .then(function(bl){
+    var download=function(why){
+      var url=URL.createObjectURL(bl), a=document.createElement('a');
+      a.href=url; a.download='요약표_'+(typeof _todayISO==='function'?_todayISO():'')+'.png'; document.body.appendChild(a); a.click();
+      setTimeout(function(){ a.remove(); URL.revokeObjectURL(url); },500);
+      showSaveToast((why||'클립보드 복사가 막혀 있어')+' PNG 파일로 내려받았습니다.','warn');
+    };
+    if(navigator.clipboard&&window.ClipboardItem&&window.isSecureContext){
+      return navigator.clipboard.write([new ClipboardItem({'image/png':bl})])
+        .then(function(){ showSaveToast('표를 그림으로 복사했습니다. 붙여넣을 곳에서 Ctrl+V 하세요.'); })
+        .catch(function(){ download(); });
+    }
+    download('이 환경에서는 클립보드 복사가 안 돼서');
+  })
+  .catch(function(e){ showSaveToast('그림 복사 실패: '+((e&&e.message)||e),'err'); })
+  .then(fin,fin);
 }
 
 /* ── 드래그 토큰 ── */
@@ -6211,7 +6251,7 @@ function renderLivePreview(){
   /* 폭 캐시가 없으면(첫 렌더·열 구성 변경) 표본 행만 auto로 그려 폭을 재고 캐시한다.
      그 다음 본 표는 colgroup+fixed로 그리므로 전체 셀을 재는 비용이 사라진다. */
   var _ws=_pvWidthsFor(colSel);
-  if(!_ws){
+  if(!_ws&&tbArr.length){
     wrap.innerHTML='<table class="pv-tbl"><thead><tr>'+th+'</tr></thead><tbody>'+tbArr.slice(0,PV_WIDTH_SAMPLE).join('')+'</tbody></table>';
     try{
       var _mths=wrap.querySelectorAll('thead th'), _arr=[];
@@ -6223,7 +6263,12 @@ function renderLivePreview(){
   wrap.innerHTML='<table class="pv-tbl"'+(_ws?' style="table-layout:fixed;width:auto"':'')+'>'
     +(_ws?_pvColgroupHTML(_ws):'')
     +'<thead><tr>'+th+'</tr></thead><tbody>'+tb+'</tbody></table>';
-  if(!_ws&&typeof pvPinColWidths==='function')pvPinColWidths();
+  if(!_ws&&tbArr.length&&typeof pvPinColWidths==='function')pvPinColWidths();
+  /* v3.8.1 — 데이터는 있는데 필터에 걸려 한 행도 안 보이면 가운데 안내 (머리글은 남겨 열 필터를 바로 고칠 수 있게) */
+  if(body.length&&!filtRows.length){
+    if(getComputedStyle(wrap).position==='static')wrap.style.position='relative';
+    wrap.insertAdjacentHTML('beforeend','<div class="pv-filter-empty"><div class="box"><b>필터를 해제해 주세요</b><span>지금 걸린 필터에 맞는 항목이 없습니다 (전체 '+body.length.toLocaleString()+'행)</span><button type="button" onclick="pvResetAllFilters()">필터 해제</button></div></div>');
+  }
   _pvUpdateShownLabel();
   try{ _pvBindDelegation(); }catch(e){window._qmSoft&&window._qmSoft('_fmtMD',e);}
   try{ if(typeof updateBtn==='function')updateBtn(); }catch(e){window._qmSoft&&window._qmSoft('_fmtMD#2',e);}   /* 데이터가 생기면 엑셀 다운로드 활성화 */
